@@ -295,32 +295,46 @@ function localAddresses() {
   });
 }
 
+// En un hosting (Render, Railway, Fly…) la IP local no le sirve a nadie:
+// lo que hay que compartir es la URL pública.
+const PUBLIC_URL = (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || '')
+  .trim()
+  .replace(/\/$/, '');
+
 server.listen(PORT, HOST, () => {
   const port = server.address().port; // PORT puede ser 0 (puerto efímero)
   const addresses = localAddresses();
   const lan = addresses[0];
-  const lanUrl = lan ? `http://${lan.address}:${port}` : null;
 
   console.log('');
   console.log('  🕵️  JUEGO DEL IMPOSTOR');
   console.log('  ─────────────────────────────────────────');
-  console.log(`  Local:   http://localhost:${port}`);
-  if (addresses.length) {
-    addresses.forEach((a, i) => {
-      const label = i === 0 ? 'WiFi:  ' : '       ';
-      console.log(`  ${label} http://${a.address}:${port}   (${a.name})`);
-    });
+
+  let shareUrl = null;
+  if (PUBLIC_URL) {
+    console.log(`  Público: ${PUBLIC_URL}`);
+    console.log(`  Interno: http://localhost:${port}`);
+    shareUrl = PUBLIC_URL;
   } else {
-    console.log('  WiFi:    no se detectó una interfaz de red local');
+    console.log(`  Local:   http://localhost:${port}`);
+    if (addresses.length) {
+      addresses.forEach((a, i) => {
+        const label = i === 0 ? 'WiFi:  ' : '       ';
+        console.log(`  ${label} http://${a.address}:${port}   (${a.name})`);
+      });
+      shareUrl = `http://${lan.address}:${port}`;
+    } else {
+      console.log('  WiFi:    no se detectó una interfaz de red local');
+    }
   }
   console.log('  ─────────────────────────────────────────');
 
-  if (lanUrl && process.env.NO_QR !== '1') {
+  if (shareUrl && process.env.NO_QR !== '1') {
     console.log('  Escanea este QR desde el celular:');
     console.log('');
-    qrcode.generate(lanUrl, { small: true }, (qr) => {
+    qrcode.generate(shareUrl, { small: true }, (qr) => {
       console.log(qr.split('\n').map((line) => '  ' + line).join('\n'));
-      console.log(`  ${lanUrl}`);
+      console.log(`  ${shareUrl}`);
       console.log('');
     });
   }

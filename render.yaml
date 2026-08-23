@@ -1,0 +1,13 @@
+# Blueprint de Render. En el dashboard: New → Blueprint → apunta a este repo.
+# Render inyecta PORT y RENDER_EXTERNAL_URL solo; no hay que configurarlos a mano.
+services:
+  - type: web
+    name: juego-impostor
+    runtime: node
+    plan: free
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"

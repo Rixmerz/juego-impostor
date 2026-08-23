@@ -44,6 +44,9 @@ con esa dirección `http://192.168.x.x:3000`. Escanea el QR o pásale el link al
 | `PORT` | `3000` | Puerto del servidor (`PORT=8080 npm start`) |
 | `HOST` | `0.0.0.0` | Interfaz donde escucha. `127.0.0.1` lo deja solo local |
 | `NO_QR` | – | `NO_QR=1` no imprime el código QR |
+| `PUBLIC_URL` | – | URL pública a mostrar y codificar en el QR, en vez de la IP local. En Render se toma sola de `RENDER_EXTERNAL_URL` |
+
+Ninguna es obligatoria: `npm start` a secas funciona.
 
 ### Si los celulares no se conectan
 
@@ -75,6 +78,40 @@ Mantén Termux abierto — si Android lo mata en segundo plano, se cae la partid
 En **iPhone no hay una opción razonable**: iOS no permite correr Node de verdad. Usa un
 computador, un Android, o súbelo a un hosting gratuito (Render, Railway, Fly.io) y jueguen
 desde cualquier red.
+
+### Subirlo a Render (jugar sin estar en la misma red)
+
+El repo trae `render.yaml`, así que no hay nada que configurar a mano:
+
+1. En [Render](https://dashboard.render.com): **New → Blueprint**.
+2. Conecta este repositorio. Render lee `render.yaml` y arma el servicio solo.
+3. **Apply**. Al terminar entrega una URL tipo `https://juego-impostor.onrender.com`.
+
+Eso es todo: esa URL la abre cualquiera desde cualquier red, sin IPs ni QR.
+
+**Variables de entorno: ninguna.** Render inyecta `PORT` y `RENDER_EXTERNAL_URL`
+automáticamente, y el servidor las usa tal cual (`RENDER_EXTERNAL_URL` es lo que hace
+que el QR y el log apunten a la URL pública en vez de a una IP interna del contenedor).
+Lo único que fija el blueprint es `NODE_VERSION=22`.
+
+Si prefieres crear el servicio a mano en vez de usar el blueprint:
+
+| Campo | Valor |
+|---|---|
+| Runtime | Node |
+| Build command | `npm ci --omit=dev` |
+| Start command | `npm start` |
+| Health check path | `/api/health` |
+
+#### Lo que tienes que saber del plan gratis
+
+- **Se apaga tras ~15 minutos sin visitas** y la primera carga después tarda ~50 s.
+  Las salas viven en memoria, así que **al apagarse se pierden**. Para una partida
+  seguida no molesta; si vas a jugar más tarde, abre la URL un minuto antes.
+- **Una sola instancia.** Es lo correcto aquí: al vivir el estado en memoria, escalar a
+  varias instancias partiría las salas entre ellas. Si algún día lo escalas, Socket.IO
+  necesita sticky sessions y un adapter compartido.
+- WebSockets funcionan sin configuración extra.
 
 ---
 
