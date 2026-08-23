@@ -145,6 +145,18 @@ body {
 }
 .brand-sub { margin: 0; color: var(--text-dim); font-size: 14px; }
 
+.invite-title {
+  margin: 8px 0 4px;
+  font-size: 28px;
+  font-weight: 800;
+}
+.invite-code {
+  color: var(--accent-2);
+  letter-spacing: 4px;
+  font-weight: 800;
+}
+.player-tag.pending { background: rgba(255, 176, 32, 0.18); color: var(--warning); }
+
 /* ---------- Formularios ---------- */
 
 .field { display: flex; flex-direction: column; gap: 6px; }

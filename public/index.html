@@ -56,6 +56,44 @@
     </div>
   </section>
 
+  <!-- ============ INVITACIÓN POR LINK ============ -->
+  <section class="screen" id="screen-invite">
+    <div class="screen-body center">
+      <div class="brand">
+        <div class="brand-mark">✉️</div>
+        <h1 class="invite-title">Te invitaron a jugar</h1>
+        <p class="brand-sub">Sala <b class="invite-code" id="invite-code">····</b></p>
+      </div>
+
+      <div class="field">
+        <label for="input-invite-name">Tu nombre</label>
+        <input id="input-invite-name" type="text" maxlength="16" placeholder="¿Cómo te llamas?"
+               autocomplete="nickname" autocapitalize="words" enterkeyhint="go">
+      </div>
+
+      <div class="stack">
+        <button class="btn btn-primary btn-lg" id="btn-invite-join">Entrar a la sala</button>
+        <button class="btn btn-ghost" data-back="home">Mejor no</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ESPERANDO LA SIGUIENTE RONDA ============ -->
+  <section class="screen" id="screen-waiting">
+    <div class="screen-body center">
+      <div class="brand">
+        <div class="brand-mark">⏳</div>
+        <h1 class="invite-title">Ya estás dentro</h1>
+      </div>
+      <p class="lead" id="waiting-text">Hay una ronda en curso. Entras en la siguiente.</p>
+      <div class="card">
+        <div class="card-head"><h3>En la sala <span class="counter" id="waiting-count"></span></h3></div>
+        <ul class="players" id="waiting-players"></ul>
+      </div>
+      <p class="hint-text">No mires las pantallas de los demás 👀</p>
+    </div>
+  </section>
+
   <!-- ============ CREAR / CONFIGURAR ============ -->
   <section class="screen" id="screen-create">
     <header class="topbar">

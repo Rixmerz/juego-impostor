@@ -117,7 +117,9 @@ Si prefieres crear el servicio a mano en vez de usar el blueprint:
 
 ## Cómo se juega
 
-1. **Inicio** — cada uno escribe su nombre. Uno crea la sala, el resto se une con el código de 4 letras.
+1. **Inicio** — cada uno escribe su nombre. Uno crea la sala, el resto se une con el código de 4 letras
+   o abriendo el link directo (`.../?sala=ABCD`), que el anfitrión comparte tocando el código.
+   Quien llega con una partida en curso entra igual y juega desde la ronda siguiente.
 2. **Configuración** (solo el anfitrión) — jugadores, impostores, pista, tópico visible, tiempo y tópicos.
 3. **Cartas** — cada jugador **mantiene presionada** su carta para verla en privado.
    - Tripulantes: ven la palabra.
@@ -176,8 +178,13 @@ Si prefieres crear el servicio a mano en vez de usar el blueprint:
 - **Móvil primero**: targets de 52 px, `safe-area` para el notch, alto fijo al viewport
   (el contenido scrollea dentro, los botones nunca se van de pantalla), soporte de vibración
   y `prefers-reduced-motion`.
-- **Reconexión**: la sesión queda guardada en `localStorage`; si se cierra el navegador o
-  se corta la WiFi, al volver recupera la sala y su carta.
+- **Conexión que aguanta**: arranca por HTTP polling y sube a WebSocket solo cuando la red lo
+  permite, así funciona también donde el WebSocket está bloqueado (WiFi corporativo, colegios,
+  algunas operadoras, VPNs).
+- **Reconexión**: la sesión queda guardada en `localStorage`; si se cierra el navegador, se
+  bloquea la pantalla o se pasa de WiFi a datos, al volver recupera la sala y su carta. En el
+  lobby hay 45 s de gracia antes de sacar a nadie, y si alguien se cae a mitad de ronda, la
+  partida sigue en vez de quedarse esperándolo.
 - **La palabra nunca viaja de más**: el estado público que reciben todos no incluye la palabra,
   la pista ni quiénes son impostores. Cada jugador recibe su carta por un canal privado
   (hay pruebas que lo verifican).
@@ -202,9 +209,13 @@ test/
 ## Pruebas
 
 ```bash
-npm test            # lógica del juego + partida por sockets (no necesita navegador)
-npm run test:e2e    # partida completa con 5 celulares simulados (requiere el server corriendo)
+npm test              # lógica del juego + partida por sockets (no necesita navegador)
+npm run test:e2e      # partida completa con 5 celulares simulados
+npm run test:sesiones # transporte, link directo, entrar a mitad de partida y reconexión
+npm run test:all      # todo lo anterior
 ```
+
+Los dos últimos necesitan el servidor corriendo.
 
 Para el e2e hace falta Playwright:
 

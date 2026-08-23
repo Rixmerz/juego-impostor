@@ -12,7 +12,19 @@
   var MIN_PLAYERS = 3;
   var MAX_PLAYERS = 20;
 
-  var socket = io({ transports: ['websocket', 'polling'] });
+  // No forzamos WebSocket: en redes que lo bloquean (WiFi corporativo, algunas
+  // operadoras, VPNs) el cliente quedaba sin conectar, porque Socket.IO no prueba
+  // el resto de transportes salvo que se le pida. Arrancamos por polling —que pasa
+  // siempre— y él solo sube a WebSocket cuando puede.
+  var socket = io({
+    transports: ['polling', 'websocket'],
+    tryAllTransports: true,
+    reconnection: true,
+    reconnectionDelay: 500,
+    reconnectionDelayMax: 4000,
+    reconnectionAttempts: Infinity,
+    timeout: 20000
+  });
 
   var state = {
     playerId: null,
@@ -32,7 +44,8 @@
     },
     editingConfig: false,
     myVote: null,
-    lastPhase: null
+    lastPhase: null,
+    invitacion: null
   };
 
   /* ---------------- utilidades ---------------- */
@@ -107,10 +120,11 @@
     return v;
   }
 
-  function emit(event, payload, onOk) {
+  function emit(event, payload, onOk, onFail) {
     socket.emit(event, payload, function (res) {
       if (!res || res.ok === false) {
         toast((res && res.error) || 'Algo salió mal', true);
+        if (onFail) onFail(res);
         return;
       }
       if (onOk) onOk(res);
@@ -306,25 +320,43 @@
     });
   });
 
+  function entrarASala(code, name, onFail) {
+    emit('room:join', { name: name, code: code }, function (res) {
+      state.playerId = res.playerId;
+      state.token = res.token;
+      state.code = res.code;
+      state.invitacion = null;
+      saveSession();
+      show('lobby');
+      if (res.pending) toast('Hay una ronda en curso: entras en la siguiente');
+    }, onFail);
+  }
+
   $('#btn-join').addEventListener('click', function () {
     var name = requireName();
     if (!name) return;
     var code = $('#input-code').value.trim().toUpperCase();
     if (code.length !== 4) { toast('El código tiene 4 caracteres', true); return; }
-    emit('room:join', { name: name, code: code }, function (res) {
-      state.playerId = res.playerId;
-      state.token = res.token;
-      state.code = res.code;
-      saveSession();
-      show('lobby');
-    });
+    entrarASala(code, name);
+  });
+
+  $('#btn-invite-join').addEventListener('click', function () {
+    var name = $('#input-invite-name').value.trim();
+    if (!name) { toast('Escribe tu nombre', true); $('#input-invite-name').focus(); return; }
+    try { localStorage.setItem(STORAGE_NAME, name); } catch (e) {}
+    $('#input-name').value = name;
+    entrarASala(state.invitacion, name, function () { show('home'); });
+  });
+
+  $('#input-invite-name').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') $('#btn-invite-join').click();
   });
 
   /* ---------------- lobby ---------------- */
 
   $('#room-code-box').addEventListener('click', function () {
     var url = location.origin + '/?sala=' + state.code;
-    var text = '¡Juguemos al Impostor! Código: ' + state.code + ' → ' + url;
+    var text = '¡Juguemos al Impostor! Entra directo: ' + url + '  (código ' + state.code + ')';
     if (navigator.share) {
       navigator.share({ title: 'Impostor', text: text, url: url }).catch(function () {});
     } else if (navigator.clipboard) {
@@ -418,8 +450,16 @@
       if (phase === 'results') buzz([40, 60, 40, 60, 80]);
     }
 
+    // Quien entró con la ronda ya empezada mira desde afuera hasta la siguiente.
+    var enEspera = state.priv && state.priv.pending;
+    if (phase !== 'lobby' && enEspera) {
+      renderWaiting(room);
+      if (activeScreen() !== 'waiting') show('waiting');
+      return;
+    }
+
     if (phase === 'lobby') {
-      if (['reveal', 'discussion', 'voting', 'results'].indexOf(activeScreen()) >= 0) show('lobby');
+      if (['reveal', 'discussion', 'voting', 'results', 'waiting'].indexOf(activeScreen()) >= 0) show('lobby');
       else if (activeScreen() !== 'create') show('lobby');
     } else if (phase === 'reveal') {
       renderReveal(room);
@@ -534,6 +574,7 @@
     });
 
     if (p.isHost) li.appendChild(tagEl('Anfitrión', 'host'));
+    if (p.pending) li.appendChild(tagEl('Entra la próxima', 'pending'));
     if (p.connected === false) li.appendChild(tagEl('Offline', 'off'));
 
     if (opts.kickable) {
@@ -555,6 +596,23 @@
     el.className = 'player-tag ' + (kind || '');
     el.textContent = text;
     return el;
+  }
+
+  function renderWaiting(room) {
+    var fase = {
+      reveal: 'Están viendo sus cartas.',
+      discussion: 'Están debatiendo.',
+      voting: 'Están votando.',
+      results: 'Están viendo los resultados.'
+    }[room.phase] || '';
+    $('#waiting-text').textContent = fase + ' Entras en la siguiente ronda.';
+    $('#waiting-count').textContent = room.players.length + ' jugadores';
+
+    var list = $('#waiting-players');
+    list.innerHTML = '';
+    room.players.forEach(function (p) {
+      list.appendChild(playerRow(p, { showScore: room.roundNumber > 0 }));
+    });
   }
 
   function renderReveal(room) {
@@ -650,7 +708,7 @@
     var alreadyVoted = me && me.hasVoted;
 
     room.players.forEach(function (p) {
-      if (!p.connected) return;
+      if (!p.connected || p.pending) return;
       var btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'vote-btn' + (state.myVote === p.id ? ' is-picked' : '');
@@ -750,8 +808,19 @@
 
   /* ---------------- socket ---------------- */
 
+  var pendienteDeEntrar = null;
+
   socket.on('connect', function () {
     $('#connection').hidden = true;
+
+    // Link directo con nombre ya conocido: entramos solos apenas hay conexión.
+    if (pendienteDeEntrar) {
+      var inv = pendienteDeEntrar;
+      pendienteDeEntrar = null;
+      entrarASala(inv.code, inv.name, function () { show('home'); });
+      return;
+    }
+
     var sess = readSession();
     if (sess && sess.playerId && sess.token && sess.code) {
       socket.emit('room:resume', sess, function (res) {
@@ -811,11 +880,21 @@
     } catch (e) {}
 
     var params = new URLSearchParams(location.search);
-    var sala = params.get('sala') || params.get('room');
+    var sala = (params.get('sala') || params.get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
     if (sala) {
-      $('#input-code').value = sala.toUpperCase().slice(0, 4);
-      if ($('#input-name').value.trim()) show('join');
-      else { show('home'); toast('Escribe tu nombre para entrar a la sala ' + sala.toUpperCase()); }
+      state.invitacion = sala;
+      $('#input-code').value = sala;
+      $('#invite-code').textContent = sala;
+      var guardado = $('#input-name').value.trim();
+      if (guardado) {
+        // Ya sabemos quién es: lo metemos directo, sin pantallas intermedias.
+        $('#input-invite-name').value = guardado;
+        pendienteDeEntrar = { code: sala, name: guardado };
+        show('invite');
+      } else {
+        show('invite');
+        setTimeout(function () { $('#input-invite-name').focus(); }, 300);
+      }
       history.replaceState(null, '', location.pathname);
     }
 

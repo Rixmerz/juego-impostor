@@ -65,7 +65,11 @@ function fail(cb, message) {
   if (typeof cb === 'function') cb({ ok: false, error: message });
 }
 
+const LOBBY_GRACE_MS = Number(process.env.LOBBY_GRACE_MS) || 45000;
+
 function attach(socket, room, player) {
+  clearTimeout(player.dropTimer);
+  player.dropTimer = null;
   // Si el jugador tenía otro socket abierto, lo desconectamos.
   if (player.socketId && player.socketId !== socket.id) {
     const old = io.sockets.sockets.get(player.socketId);
@@ -99,13 +103,20 @@ io.on('connection', (socket) => {
   socket.on('room:join', (payload, cb) => {
     const room = store.get(payload?.code);
     if (!room) return fail(cb, 'No existe una sala con ese código');
-    if (room.phase !== PHASES.LOBBY) return fail(cb, 'La partida ya empezó. Espera a que termine la ronda');
     if (room.playerList.length >= room.config.maxPlayers) return fail(cb, 'La sala está llena');
 
+    // Se puede entrar en cualquier momento: si hay una ronda en curso, el
+    // jugador queda a la espera y entra en la siguiente.
     const player = room.addPlayer(room.uniqueName(payload?.name));
     attach(socket, room, player);
     if (typeof cb === 'function') {
-      cb({ ok: true, code: room.code, playerId: player.id, token: player.token });
+      cb({
+        ok: true,
+        code: room.code,
+        playerId: player.id,
+        token: player.token,
+        pending: Boolean(player.pending)
+      });
     }
     broadcastRoom(room);
   });
@@ -245,6 +256,8 @@ io.on('connection', (socket) => {
   socket.on('room:leave', (_payload, cb) => {
     const room = store.get(socket.data.roomCode);
     if (room && socket.data.playerId) {
+      const saliendo = room.players.get(socket.data.playerId);
+      if (saliendo) clearTimeout(saliendo.dropTimer);
       room.removePlayer(socket.data.playerId);
       socket.leave(room.code);
       if (room.playerList.length === 0) store.destroy(room.code);
@@ -264,13 +277,23 @@ io.on('connection', (socket) => {
     player.socketId = null;
     room.touch();
 
-    // En el lobby no tiene sentido guardar sillas vacías.
+    // Bloquear la pantalla, cambiar de app o pasar de WiFi a datos corta el
+    // socket por unos segundos. Damos margen antes de sacar a nadie del lobby;
+    // con la partida en curso el jugador se queda hasta que él decida salir.
     if (room.phase === PHASES.LOBBY) {
-      room.removePlayer(player.id);
-      if (room.playerList.length === 0) {
-        store.destroy(room.code);
-        return;
-      }
+      clearTimeout(player.dropTimer);
+      player.dropTimer = setTimeout(() => {
+        const actual = room.players.get(player.id);
+        if (!actual || actual.connected) return;
+        room.removePlayer(actual.id);
+        if (room.playerList.length === 0) store.destroy(room.code);
+        else broadcastRoom(room);
+      }, LOBBY_GRACE_MS);
+      if (player.dropTimer.unref) player.dropTimer.unref();
+    } else {
+      // Si el que se cayó era el último que faltaba por revelar o votar,
+      // la ronda debe poder seguir igual.
+      room.unblockPhase();
     }
     broadcastRoom(room);
   });

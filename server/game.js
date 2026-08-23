@@ -107,7 +107,17 @@ class Room {
   }
 
   get activePlayers() {
-    return this.playerList.filter((p) => p.connected);
+    return this.playerList.filter((p) => p.connected && !p.pending);
+  }
+
+  /** Jugadores conectados que participan de la ronda en curso. */
+  get roundPlayers() {
+    if (!this.round) return this.activePlayers;
+    return this.playerList.filter((p) => p.connected && this.round.participants.has(p.id));
+  }
+
+  isParticipant(playerId) {
+    return !this.round || this.round.participants.has(playerId);
   }
 
   addPlayer(name) {
@@ -119,6 +129,9 @@ class Room {
       connected: true,
       score: 0,
       ready: false,
+      // Quien llega con una ronda en curso espera a la siguiente: no recibe
+      // carta, no vota, y no bloquea el avance de los que sí están jugando.
+      pending: this.phase !== PHASES.LOBBY,
       joinedAt: Date.now()
     };
     this.players.set(player.id, player);
@@ -130,10 +143,12 @@ class Room {
 
   removePlayer(playerId) {
     if (!this.players.has(playerId)) return;
+    const wasParticipant = this.round && this.round.participants.has(playerId);
     this.players.delete(playerId);
     this.order = this.order.filter((id) => id !== playerId);
     if (this.round) {
       this.round.impostorIds.delete(playerId);
+      this.round.participants.delete(playerId);
       this.round.revealed.delete(playerId);
       this.round.votes.delete(playerId);
       for (const [voter, target] of Array.from(this.round.votes.entries())) {
@@ -144,7 +159,21 @@ class Room {
     if (this.hostId === playerId) {
       this.hostId = this.order[0] || null;
     }
+    // Si el que se fue era el último que faltaba, la ronda no puede quedar colgada.
+    if (wasParticipant) this.unblockPhase();
     this.touch();
+  }
+
+  /** Reevalúa si la fase actual ya se puede cerrar (alguien se fue o se desconectó). */
+  unblockPhase() {
+    if (!this.round) return;
+    const esperando = this.roundPlayers;
+    if (esperando.length === 0) return;
+    if (this.phase === PHASES.REVEAL && esperando.every((p) => this.round.revealed.has(p.id))) {
+      this.beginDiscussion();
+    } else if (this.phase === PHASES.VOTING && esperando.every((p) => this.round.votes.has(p.id))) {
+      this.resolveVotes();
+    }
   }
 
   isNameTaken(name) {
@@ -173,6 +202,10 @@ class Room {
   }
 
   startRound() {
+    // Los que estaban esperando entran a esta ronda: hay que sumarlos antes de
+    // validar y antes de repartir, o quedarían fuera una ronda de más.
+    for (const p of this.players.values()) p.pending = false;
+
     const check = this.canStart();
     if (!check.ok) return check;
 
@@ -192,6 +225,7 @@ class Room {
       word: entry.word,
       hint: entry.hint,
       impostorIds,
+      participants: new Set(players.map((p) => p.id)),
       revealed: new Set(),
       votes: new Map(),
       order: shuffle(players.map((p) => p.id)),
@@ -208,12 +242,13 @@ class Room {
   markRevealed(playerId) {
     if (this.phase !== PHASES.REVEAL || !this.round) return false;
     if (!this.players.has(playerId)) return false;
+    if (!this.isParticipant(playerId)) return false;
     this.round.revealed.add(playerId);
     const player = this.players.get(playerId);
     player.ready = true;
     this.touch();
 
-    const pending = this.activePlayers.filter((p) => !this.round.revealed.has(p.id));
+    const pending = this.roundPlayers.filter((p) => !this.round.revealed.has(p.id));
     if (pending.length === 0) {
       this.beginDiscussion();
       return true;
@@ -245,13 +280,14 @@ class Room {
   castVote(voterId, targetId) {
     if (this.phase !== PHASES.VOTING || !this.round) return { ok: false, reason: 'No es momento de votar' };
     if (!this.players.has(voterId)) return { ok: false, reason: 'No estás en la sala' };
+    if (!this.isParticipant(voterId)) return { ok: false, reason: 'Entras en la siguiente ronda' };
     if (voterId === targetId) return { ok: false, reason: 'No puedes votarte a ti mismo' };
     if (targetId !== 'skip' && !this.players.has(targetId)) return { ok: false, reason: 'Ese jugador ya no está' };
 
     this.round.votes.set(voterId, targetId);
     this.touch();
 
-    const pending = this.activePlayers.filter((p) => !this.round.votes.has(p.id));
+    const pending = this.roundPlayers.filter((p) => !this.round.votes.has(p.id));
     if (pending.length === 0) this.resolveVotes();
     return { ok: true, resolved: this.phase === PHASES.RESULTS };
   }
@@ -348,6 +384,7 @@ class Room {
         isHost: p.id === this.hostId,
         connected: p.connected,
         score: p.score,
+        pending: Boolean(p.pending) || (this.round ? !this.round.participants.has(p.id) : false),
         ready: revealed.has(p.id),
         hasVoted: votes.has(p.id)
       })),
@@ -359,7 +396,7 @@ class Room {
             order: this.round.order.map((id) => this.players.get(id)?.name).filter(Boolean),
             revealedCount: this.round.revealed.size,
             voteCount: this.round.votes.size,
-            totalPlayers: this.activePlayers.length,
+            totalPlayers: this.roundPlayers.length,
             result: this.phase === PHASES.RESULTS ? this.round.result : null
           }
         : null
@@ -370,6 +407,7 @@ class Room {
   privateState(playerId) {
     if (!this.round || this.phase === PHASES.LOBBY) return null;
     if (!this.players.has(playerId)) return null;
+    if (!this.isParticipant(playerId)) return { pending: true, round: this.round.number };
 
     const isImpostor = this.round.impostorIds.has(playerId);
     const showCategory = this.config.showCategory;

@@ -410,7 +410,7 @@ test('buscar sala no distingue mayúsculas', () => {
       assert.strictEqual(restored.private.word, before.word);
     });
 
-    await testAsync('no se puede entrar a una partida ya empezada ni a una sala llena', async () => {
+    await testAsync('no se puede entrar a una sala llena', async () => {
       const host = await connect();
       const created = await ask(host, 'room:create', { name: 'Ana', config: { maxPlayers: 3 } });
       const p2 = await connect();
@@ -420,10 +420,93 @@ test('buscar sala no distingue mayúsculas', () => {
 
       const p4 = await connect();
       await assert.rejects(() => ask(p4, 'room:join', { name: 'Dani', code: created.code }), /llena/);
+    });
 
+    await testAsync('quien entra con la ronda en curso espera y juega la siguiente', async () => {
+      const host = await connect();
+      const created = await ask(host, 'room:create', { name: 'Ana', config: { maxPlayers: 6, discussionSeconds: 0 } });
+      const p2 = await connect();
+      const p3 = await connect();
+      await ask(p2, 'room:join', { name: 'Beto', code: created.code });
+      await ask(p3, 'room:join', { name: 'Caro', code: created.code });
       await ask(host, 'game:start', {});
-      const p5 = await connect();
-      await assert.rejects(() => ask(p5, 'room:join', { name: 'Eva', code: created.code }), /empezó/);
+      await waitFor(host, 'room:state', (s) => s.phase === 'reveal');
+
+      // Entra con la partida ya empezada: no se le rechaza, queda a la espera.
+      const tarde = await connect();
+      const res = await ask(tarde, 'room:join', { name: 'Dani', code: created.code });
+      assert.strictEqual(res.pending, true, 'debería quedar pendiente');
+
+      const suCarta = await waitFor(tarde, 'you:state', (d) => d.private);
+      assert.strictEqual(suCarta.private.pending, true, 'no debe recibir carta de esta ronda');
+      assert.strictEqual(suCarta.private.word, undefined, 'no debe ver la palabra');
+
+      const estado = await waitFor(host, 'room:state', (s) => s.players.length === 4);
+      assert.strictEqual(estado.round.totalPlayers, 3, 'el que espera no cuenta para la ronda');
+      assert.strictEqual(estado.players.find((p) => p.name === 'Dani').pending, true);
+
+      // Los 3 originales avanzan sin que el pendiente los bloquee.
+      await ask(host, 'game:revealed', {});
+      await ask(p2, 'game:revealed', {});
+      await ask(p3, 'game:revealed', {});
+      await waitFor(host, 'room:state', (s) => s.phase === 'discussion');
+
+      // Y no puede votar en una ronda que no juega.
+      await ask(host, 'game:voting', {});
+      await waitFor(host, 'room:state', (s) => s.phase === 'voting');
+      await assert.rejects(() => ask(tarde, 'game:vote', { targetId: 'skip' }), /siguiente ronda/);
+
+      // En la ronda siguiente ya es uno más.
+      await ask(host, 'game:forceResults', {});
+      await waitFor(host, 'room:state', (s) => s.phase === 'results');
+      await ask(host, 'game:next', {});
+      const ronda2 = await waitFor(host, 'room:state', (s) => s.phase === 'reveal' && s.round.number === 2);
+      assert.strictEqual(ronda2.round.totalPlayers, 4, 'ahora juegan los 4');
+      const carta2 = await waitFor(tarde, 'you:state', (d) => d.private && d.private.round === 2);
+      assert.ok(!carta2.private.pending, 'ya no debería estar pendiente');
+      assert.ok(carta2.private.role, 'debería recibir rol');
+    });
+
+    await testAsync('una desconexión no deja la ronda colgada', async () => {
+      const host = await connect();
+      const created = await ask(host, 'room:create', { name: 'Ana', config: { discussionSeconds: 0 } });
+      const p2 = await connect();
+      const p3 = await connect();
+      await ask(p2, 'room:join', { name: 'Beto', code: created.code });
+      await ask(p3, 'room:join', { name: 'Caro', code: created.code });
+      await ask(host, 'game:start', {});
+      await waitFor(host, 'room:state', (s) => s.phase === 'reveal');
+
+      // Dos revelan; el tercero se cae sin revelar. La ronda debe avanzar igual.
+      await ask(host, 'game:revealed', {});
+      await ask(p2, 'game:revealed', {});
+      p3.disconnect();
+      await waitFor(host, 'room:state', (s) => s.phase === 'discussion');
+
+      // Lo mismo en la votación.
+      await ask(host, 'game:voting', {});
+      await waitFor(host, 'room:state', (s) => s.phase === 'voting');
+      await ask(host, 'game:vote', { targetId: 'skip' });
+      await ask(p2, 'game:vote', { targetId: 'skip' });
+      const fin = await waitFor(host, 'room:state', (s) => s.phase === 'results');
+      assert.ok(fin.round.result, 'debería haber resultado');
+    });
+
+    await testAsync('caerse un momento en el lobby no te expulsa', async () => {
+      const host = await connect();
+      const created = await ask(host, 'room:create', { name: 'Ana' });
+      const p2 = await connect();
+      const j2 = await ask(p2, 'room:join', { name: 'Beto', code: created.code });
+
+      p2.disconnect();
+      await new Promise((r) => setTimeout(r, 150));
+      const durante = await waitFor(host, 'room:state', (s) => s.players.some((p) => p.name === 'Beto' && !p.connected));
+      assert.strictEqual(durante.players.length, 2, 'sigue en la sala mientras dura la gracia');
+
+      const vuelve = await connect();
+      await ask(vuelve, 'room:resume', { code: created.code, playerId: j2.playerId, token: j2.token });
+      const despues = await waitFor(host, 'room:state', (s) => s.players.every((p) => p.connected));
+      assert.strictEqual(despues.players.length, 2, 'recupera su lugar al volver');
     });
 
     await testAsync('el anfitrión puede cambiar la configuración y los demás no', async () => {
