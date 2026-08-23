@@ -16,6 +16,9 @@ npm install
 npm start
 ```
 
+> Solo se instalan 3 dependencias (~32 MB). Playwright **no** viene incluido:
+> hace falta únicamente para el test e2e y se instala aparte (ver *Pruebas*).
+
 La consola imprime la dirección local, **la dirección de tu WiFi** y un **código QR**:
 
 ```
@@ -47,6 +50,31 @@ con esa dirección `http://192.168.x.x:3000`. Escanea el QR o pásale el link al
 - Todos deben estar en **la misma red** (ojo con las redes "Invitados", que aíslan dispositivos).
 - El firewall del computador tiene que permitir el puerto 3000.
 - Usa la IP que imprime la consola, no `localhost` (en el celular `localhost` es el celular).
+
+### Levantarlo desde un celular Android (sin computador)
+
+Con [Termux](https://f-droid.org/packages/com.termux/) (**instálalo desde F-Droid**, la versión
+de Play Store está abandonada y falla):
+
+```bash
+pkg update && pkg install nodejs git
+git clone https://github.com/Rixmerz/juego-impostor
+cd juego-impostor
+npm install
+npm start
+```
+
+Las dependencias son JavaScript puro, así que no hay nada que compilar y funciona en ARM.
+Termux imprime la IP igual que en un computador; el resto se conecta a esa dirección.
+Si no hay WiFi, activa el **hotspot** del teléfono que hace de servidor y que los demás
+se conecten ahí: la IP que imprime sigue siendo válida dentro de esa red.
+
+Mantén Termux abierto — si Android lo mata en segundo plano, se cae la partida.
+`termux-wake-lock` antes de `npm start` ayuda.
+
+En **iPhone no hay una opción razonable**: iOS no permite correr Node de verdad. Usa un
+computador, un Android, o súbelo a un hosting gratuito (Render, Railway, Fly.io) y jueguen
+desde cualquier red.
 
 ---
 
