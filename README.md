@@ -217,6 +217,13 @@ npm run test:all      # todo lo anterior
 
 Los dos últimos necesitan el servidor corriendo.
 
+Para verificar una instancia ya desplegada, sin navegador —juega una partida entera
+contra el servidor remoto y comprueba de paso qué versión está sirviendo:
+
+```bash
+npm run test:prod -- https://tu-app.onrender.com
+```
+
 Para el e2e hace falta Playwright:
 
 ```bash

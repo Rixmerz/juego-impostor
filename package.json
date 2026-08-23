@@ -10,7 +10,8 @@
     "test": "node test/game.test.js",
     "test:e2e": "node test/e2e.js",
     "test:all": "npm test && npm run test:e2e && npm run test:sesiones",
-    "test:sesiones": "node test/e2e-sesiones.js"
+    "test:sesiones": "node test/e2e-sesiones.js",
+    "test:prod": "node test/e2e-produccion.js"
   },
   "engines": {
     "node": ">=18"
