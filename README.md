@@ -1,0 +1,151 @@
+# 🕵️ Juego del Impostor
+
+Party game para jugar en persona, cada uno desde su celular, conectados a la misma WiFi.
+Todos reciben la misma palabra secreta… menos el impostor.
+
+<p align="center">
+  <b>Crear sala → compartir código → repartir cartas → debatir → votar</b>
+</p>
+
+---
+
+## Cómo levantarlo y exponerlo por WiFi
+
+```bash
+npm install
+npm start
+```
+
+La consola imprime la dirección local, **la dirección de tu WiFi** y un **código QR**:
+
+```
+  🕵️  JUEGO DEL IMPOSTOR
+  ─────────────────────────────────────────
+  Local:   http://localhost:3000
+  WiFi:    http://192.168.1.42:3000   (wlan0)
+  ─────────────────────────────────────────
+  Escanea este QR desde el celular:
+
+  ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+  █ ▄▄▄▄▄ █▄▀▀▄▄▄▀█ ▄▄▄▄▄ █
+  ...
+```
+
+El servidor escucha en `0.0.0.0`, así que **cualquier celular en la misma red** entra
+con esa dirección `http://192.168.x.x:3000`. Escanea el QR o pásale el link al resto.
+
+### Variables
+
+| Variable | Por defecto | Para qué |
+|---|---|---|
+| `PORT` | `3000` | Puerto del servidor (`PORT=8080 npm start`) |
+| `HOST` | `0.0.0.0` | Interfaz donde escucha. `127.0.0.1` lo deja solo local |
+| `NO_QR` | – | `NO_QR=1` no imprime el código QR |
+
+### Si los celulares no se conectan
+
+- Todos deben estar en **la misma red** (ojo con las redes "Invitados", que aíslan dispositivos).
+- El firewall del computador tiene que permitir el puerto 3000.
+- Usa la IP que imprime la consola, no `localhost` (en el celular `localhost` es el celular).
+
+---
+
+## Cómo se juega
+
+1. **Inicio** — cada uno escribe su nombre. Uno crea la sala, el resto se une con el código de 4 letras.
+2. **Configuración** (solo el anfitrión) — jugadores, impostores, pista, tópico visible, tiempo y tópicos.
+3. **Cartas** — cada jugador **mantiene presionada** su carta para verla en privado.
+   - Tripulantes: ven la palabra.
+   - Impostores: ven que lo son, y la pista si está activada.
+4. **Debate** — se muestra el tópico, el orden para hablar y un cronómetro.
+   Cada uno dice **una sola palabra** relacionada: ni tan obvia que delate la palabra,
+   ni tan vaga que te haga parecer el impostor.
+5. **Votación** — todos votan (o saltan). Se puede cerrar antes desde el anfitrión.
+6. **Resultados** — se revela la palabra, quiénes eran impostores y el marcador.
+
+### Puntaje
+
+| Situación | Puntos |
+|---|---|
+| Eliminan a un impostor | +1 a cada tripulante |
+| Eliminan a un inocente | +2 a cada impostor |
+| Empate en la votación | +2 a cada impostor (nadie sale) |
+
+---
+
+## Configuración de la partida
+
+| Opción | Rango | Detalle |
+|---|---|---|
+| **Jugadores** | 3 – 20 | Cupos de la sala |
+| **Impostores** | 1 – ⌊(jugadores−1)/2⌋ | El tope se ajusta solo según cuántos haya conectados |
+| **Pista para el impostor** | sí / no | Le da una pista vaga sobre la palabra (ej: palabra *Titanic* → pista *"Un barco y un desastre"*) |
+| **Mostrar el tópico** | sí / no | Si está activo, al iniciar la partida todos ven de qué categoría es la palabra |
+| **Tiempo de debate** | 0 – 15 min | En 0 no hay cronómetro y avanzan cuando quieran |
+| **Tópicos** | 1 – 12 categorías | Se eligen tocando los chips |
+
+### Tópicos incluidos
+
+🎬 Películas · 🐾 Animales · 🍥 Anime · 🍕 Comida · ⚽ Deportes · 🌍 Países y Lugares
+👩‍⚕️ Profesiones · 🏠 Objetos de casa · 🎮 Videojuegos · 📺 Series de TV · 🎵 Música y Artistas · 🦸 Superhéroes
+
+**360 palabras**, cada una con su pista. Para agregar más, edita `server/words.js`:
+
+```js
+{
+  id: 'mi-categoria',
+  name: 'Mi Categoría',
+  emoji: '🎯',
+  words: [
+    'Palabra|pista vaga para el impostor',
+    // ...
+  ]
+}
+```
+
+---
+
+## Detalles de la implementación
+
+- **Sin build**: HTML, CSS y JS a secas. Se abre y funciona.
+- **Móvil primero**: targets de 52 px, `safe-area` para el notch, alto fijo al viewport
+  (el contenido scrollea dentro, los botones nunca se van de pantalla), soporte de vibración
+  y `prefers-reduced-motion`.
+- **Reconexión**: la sesión queda guardada en `localStorage`; si se cierra el navegador o
+  se corta la WiFi, al volver recupera la sala y su carta.
+- **La palabra nunca viaja de más**: el estado público que reciben todos no incluye la palabra,
+  la pista ni quiénes son impostores. Cada jugador recibe su carta por un canal privado
+  (hay pruebas que lo verifican).
+- **Instalable**: incluye manifest, así que se puede "Agregar a la pantalla de inicio".
+
+```
+server/
+  index.js    servidor HTTP + Socket.IO + descubrimiento de IP y QR
+  game.js     salas, rondas, roles, votación y puntaje
+  words.js    banco de palabras con pistas
+public/
+  index.html  todas las pantallas
+  css/        estilos móviles
+  js/app.js   cliente
+test/
+  game.test.js  31 pruebas (lógica + sockets)
+  e2e.js        partida completa con 5 navegadores reales
+```
+
+---
+
+## Pruebas
+
+```bash
+npm test            # lógica del juego + partida por sockets (no necesita navegador)
+npm run test:e2e    # partida completa con 5 celulares simulados (requiere el server corriendo)
+```
+
+Para el e2e hace falta Playwright:
+
+```bash
+npm i -D playwright && npx playwright install chromium
+npm start                       # en otra terminal
+npm run test:e2e                # SMALL=1 para probar en pantalla chica
+SHOTS=./capturas npm run test:e2e   # guarda capturas de cada pantalla
+```

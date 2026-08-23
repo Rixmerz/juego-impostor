@@ -1,0 +1,13 @@
+{
+  "name": "Impostor",
+  "short_name": "Impostor",
+  "description": "El juego del impostor para jugar en el celular con tus amigos.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0d0b1e",
+  "theme_color": "#0d0b1e",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

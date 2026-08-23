@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#0d0b1e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="El juego del impostor para jugar en el celular con tus amigos.">
+<title>Impostor</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon.svg">
+<link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ============ INICIO ============ -->
+  <section class="screen is-active" id="screen-home">
+    <div class="screen-body center">
+      <div class="brand">
+        <div class="brand-mark">🕵️</div>
+        <h1 class="brand-title">IMPOSTOR</h1>
+        <p class="brand-sub">Uno de ustedes no sabe la palabra</p>
+      </div>
+
+      <div class="field">
+        <label for="input-name">Tu nombre</label>
+        <input id="input-name" type="text" maxlength="16" placeholder="¿Cómo te llamas?"
+               autocomplete="nickname" autocapitalize="words" enterkeyhint="done">
+      </div>
+
+      <div class="stack">
+        <button class="btn btn-primary btn-lg" id="btn-go-create">Crear sala</button>
+        <button class="btn btn-ghost btn-lg" id="btn-go-join">Unirse a una sala</button>
+      </div>
+
+      <p class="hint-text">Todos se conectan desde su celular a la misma WiFi.</p>
+    </div>
+  </section>
+
+  <!-- ============ UNIRSE ============ -->
+  <section class="screen" id="screen-join">
+    <header class="topbar">
+      <button class="icon-btn" data-back="home" aria-label="Volver">‹</button>
+      <h2>Unirse a una sala</h2>
+      <span class="topbar-spacer"></span>
+    </header>
+    <div class="screen-body center">
+      <p class="lead">Escribe el código de 4 letras que te compartieron.</p>
+      <input id="input-code" class="code-input" type="text" inputmode="text" maxlength="4"
+             placeholder="ABCD" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="go">
+      <button class="btn btn-primary btn-lg" id="btn-join">Entrar</button>
+    </div>
+  </section>
+
+  <!-- ============ CREAR / CONFIGURAR ============ -->
+  <section class="screen" id="screen-create">
+    <header class="topbar">
+      <button class="icon-btn" data-back="home" aria-label="Volver">‹</button>
+      <h2>Configurar partida</h2>
+      <span class="topbar-spacer"></span>
+    </header>
+
+    <div class="screen-body" id="config-body">
+      <div class="card">
+        <div class="setting">
+          <div class="setting-label">
+            <span class="setting-title">Jugadores</span>
+            <span class="setting-desc">Cupos máximos en la sala</span>
+          </div>
+          <div class="stepper">
+            <button class="step-btn" data-step="maxPlayers" data-delta="-1" aria-label="Menos jugadores">−</button>
+            <span class="step-value" id="val-maxPlayers">8</span>
+            <button class="step-btn" data-step="maxPlayers" data-delta="1" aria-label="Más jugadores">+</button>
+          </div>
+        </div>
+
+        <div class="setting">
+          <div class="setting-label">
+            <span class="setting-title">Impostores</span>
+            <span class="setting-desc" id="desc-impostors">Máximo 3 con 8 jugadores</span>
+          </div>
+          <div class="stepper">
+            <button class="step-btn" data-step="impostors" data-delta="-1" aria-label="Menos impostores">−</button>
+            <span class="step-value" id="val-impostors">1</span>
+            <button class="step-btn" data-step="impostors" data-delta="1" aria-label="Más impostores">+</button>
+          </div>
+        </div>
+
+        <div class="setting">
+          <div class="setting-label">
+            <span class="setting-title">Pista para el impostor</span>
+            <span class="setting-desc">Le damos una pista vaga sobre la palabra</span>
+          </div>
+          <button class="switch" role="switch" aria-checked="true" data-toggle="hintEnabled"><span></span></button>
+        </div>
+
+        <div class="setting">
+          <div class="setting-label">
+            <span class="setting-title">Mostrar el tópico</span>
+            <span class="setting-desc">Todos ven de qué categoría es la palabra</span>
+          </div>
+          <button class="switch" role="switch" aria-checked="true" data-toggle="showCategory"><span></span></button>
+        </div>
+
+        <div class="setting">
+          <div class="setting-label">
+            <span class="setting-title">Tiempo de debate</span>
+            <span class="setting-desc" id="desc-timer">3:00 minutos</span>
+          </div>
+          <div class="stepper">
+            <button class="step-btn" data-step="discussionSeconds" data-delta="-30" aria-label="Menos tiempo">−</button>
+            <span class="step-value small" id="val-timer">3:00</span>
+            <button class="step-btn" data-step="discussionSeconds" data-delta="30" aria-label="Más tiempo">+</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h3>Tópicos</h3>
+          <div class="card-head-actions">
+            <button class="link-btn" id="btn-cat-all">Todos</button>
+            <button class="link-btn" id="btn-cat-none">Ninguno</button>
+          </div>
+        </div>
+        <p class="card-note" id="cat-count">12 categorías seleccionadas</p>
+        <div class="chips" id="categories"></div>
+      </div>
+    </div>
+
+    <div class="screen-footer">
+      <button class="btn btn-primary btn-lg" id="btn-create">Crear sala</button>
+    </div>
+  </section>
+
+  <!-- ============ LOBBY ============ -->
+  <section class="screen" id="screen-lobby">
+    <header class="topbar">
+      <button class="icon-btn" id="btn-leave" aria-label="Salir">‹</button>
+      <h2>Sala de espera</h2>
+      <span class="topbar-spacer"></span>
+    </header>
+
+    <div class="screen-body">
+      <button class="room-code" id="room-code-box">
+        <span class="room-code-label">Código de sala · toca para compartir</span>
+        <span class="room-code-value" id="room-code">····</span>
+        <span class="room-code-url" id="room-url"></span>
+      </button>
+
+      <div class="card">
+        <div class="card-head">
+          <h3>Jugadores <span class="counter" id="player-count">0/8</span></h3>
+          <span class="badge" id="scoreboard-toggle" hidden>Ronda 0</span>
+        </div>
+        <ul class="players" id="players"></ul>
+      </div>
+
+      <div class="card" id="lobby-config-view">
+        <div class="card-head">
+          <h3>Configuración</h3>
+          <button class="link-btn" id="btn-edit-config" hidden>Editar</button>
+        </div>
+        <ul class="summary" id="config-summary"></ul>
+      </div>
+    </div>
+
+    <div class="screen-footer">
+      <button class="btn btn-primary btn-lg" id="btn-start">Comenzar partida</button>
+      <p class="footer-note" id="lobby-note">Esperando al anfitrión…</p>
+    </div>
+  </section>
+
+  <!-- ============ REVELAR CARTA ============ -->
+  <section class="screen" id="screen-reveal">
+    <div class="screen-body center">
+      <p class="round-tag" id="reveal-round">Ronda 1</p>
+
+      <div class="reveal-card" id="reveal-card">
+        <div class="reveal-front">
+          <span class="reveal-eye">👁️</span>
+          <span class="reveal-cta">Mantén presionado</span>
+          <span class="reveal-sub">para ver tu carta</span>
+        </div>
+        <div class="reveal-back" id="reveal-back">
+          <span class="role-label" id="role-label">Tu palabra</span>
+          <span class="role-word" id="role-word">—</span>
+          <span class="role-extra" id="role-extra"></span>
+        </div>
+      </div>
+
+      <p class="reveal-warning">No dejes que nadie más vea tu pantalla 🤫</p>
+      <button class="btn btn-primary btn-lg" id="btn-ready">Ya la vi</button>
+      <p class="footer-note" id="reveal-progress">0 de 0 listos</p>
+    </div>
+  </section>
+
+  <!-- ============ DEBATE ============ -->
+  <section class="screen" id="screen-discussion">
+    <div class="screen-body">
+      <div class="topic-banner" id="topic-banner" hidden>
+        <span class="topic-label">El tópico es</span>
+        <span class="topic-value" id="topic-value">—</span>
+      </div>
+
+      <div class="timer" id="timer" hidden>
+        <span class="timer-value" id="timer-value">3:00</span>
+        <span class="timer-label">para debatir</span>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Orden para hablar</h3></div>
+        <ol class="order-list" id="order-list"></ol>
+      </div>
+
+      <div class="card">
+        <p class="card-note">Cada uno dice <b>una palabra</b> relacionada. Ni muy obvia, ni muy vaga. Después, a votar.</p>
+      </div>
+    </div>
+
+    <div class="screen-footer">
+      <button class="btn btn-primary btn-lg" id="btn-to-voting">Ir a votación</button>
+      <p class="footer-note" id="discussion-note">Solo el anfitrión abre la votación</p>
+    </div>
+  </section>
+
+  <!-- ============ VOTACIÓN ============ -->
+  <section class="screen" id="screen-voting">
+    <div class="screen-body">
+      <div class="vote-head">
+        <h2>¿Quién es el impostor?</h2>
+        <p class="lead" id="vote-progress">0 de 0 votaron</p>
+      </div>
+      <div class="vote-grid" id="vote-grid"></div>
+    </div>
+    <div class="screen-footer">
+      <button class="btn btn-ghost" id="btn-force-results" hidden>Cerrar votación</button>
+    </div>
+  </section>
+
+  <!-- ============ RESULTADOS ============ -->
+  <section class="screen" id="screen-results">
+    <div class="screen-body">
+      <div class="result-hero" id="result-hero">
+        <span class="result-emoji" id="result-emoji">🎉</span>
+        <h2 class="result-title" id="result-title">—</h2>
+        <p class="result-sub" id="result-sub">—</p>
+      </div>
+
+      <div class="card word-card">
+        <span class="word-card-label" id="word-card-label">La palabra era</span>
+        <span class="word-card-value" id="result-word">—</span>
+        <span class="word-card-cat" id="result-category"></span>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Impostores</h3></div>
+        <ul class="players" id="result-impostors"></ul>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Votos</h3></div>
+        <ul class="summary" id="result-votes"></ul>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Puntajes</h3></div>
+        <ul class="players" id="result-scores"></ul>
+      </div>
+    </div>
+
+    <div class="screen-footer">
+      <button class="btn btn-primary btn-lg" id="btn-next-round">Siguiente ronda</button>
+      <button class="btn btn-ghost" id="btn-back-lobby">Volver a la sala</button>
+      <p class="footer-note" id="results-note"></p>
+    </div>
+  </section>
+
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<div id="connection" class="connection" hidden>Reconectando…</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>
