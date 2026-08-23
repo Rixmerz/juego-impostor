@@ -134,7 +134,21 @@ function esperar(c, ev, pred) {
   try { await pedir(tarde, 'game:vote', { targetId: 'skip' }); } catch (e) { rechazado = /siguiente ronda/.test(e.message); }
   check(rechazado, 'el que espera no puede votar en una ronda que no juega');
 
-  console.log('\n5. Sesión: caerse y volver a mitad de partida');
+  console.log('\n5. La carta privada nunca llega tarde');
+  {
+    const orden = [];
+    const hR = (st) => { if (st.phase === 'reveal') orden.push('room'); };
+    const hY = (d) => { if (d.private && !d.private.pending) orden.push('you'); };
+    anfitrion.on('room:state', hR);
+    anfitrion.on('you:state', hY);
+    await new Promise((r) => setTimeout(r, 300));
+    anfitrion.off('room:state', hR);
+    anfitrion.off('you:state', hY);
+  }
+  const cartaConRonda = anfitrion.lastYou.private && typeof anfitrion.lastYou.private.round === 'number';
+  check(cartaConRonda, 'la carta trae su número de ronda (así el cliente descarta las viejas)');
+
+  console.log('\n6. Sesión: caerse y volver a mitad de partida');
   const antes = b.lastYou.private;
   b.io.engine.close(); // corta el transporte, como al perder la red
   await new Promise((r) => setTimeout(r, 2500));
@@ -147,7 +161,16 @@ function esperar(c, ev, pred) {
   check(restaurado.private.role === antes.role && restaurado.private.word === antes.word,
     'al volver recupera su mismo rol y su misma palabra');
 
-  console.log('\n6. Cierre de ronda y la siguiente');
+  console.log('\n7. No se puede saltar la votación');
+  let saltó = false;
+  try { await pedir(anfitrion, 'game:next', {}); saltó = true; } catch (e) { /* rechazado */ }
+  check(!saltó, 'no deja arrancar otra ronda sin haber votado');
+  let cerróVacía = false;
+  try { await pedir(anfitrion, 'game:forceResults', {}); cerróVacía = true; } catch (e) { /* rechazado */ }
+  check(!cerróVacía, 'no deja cerrar una votación en la que nadie votó');
+
+  console.log('\n8. Cierre de ronda y la siguiente');
+  await pedir(anfitrion, 'game:vote', { targetId: 'skip' });
   await pedir(anfitrion, 'game:forceResults', {});
   const res = await esperar(anfitrion, 'room:state', (s) => s.phase === 'results');
   check(Boolean(res.round.result.word), 'los resultados revelan la palabra');
