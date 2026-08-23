@@ -125,8 +125,8 @@ Si prefieres crear el servicio a mano en vez de usar el blueprint:
    - Tripulantes: ven la palabra.
    - Impostores: ven que lo son, y la pista si está activada.
 4. **Debate** — se muestra el tópico, el orden para hablar y un cronómetro.
-   En el debate y en la votación puedes **volver a ver tu carta** manteniendo presionado,
-   por si te desconectaste o simplemente se te olvidó.
+   En el debate y en la votación puedes **volver a ver tu carta** manteniendo presionado:
+   se muestra sobre toda la pantalla y se oculta al soltar.
    Cada uno dice **una sola palabra** relacionada: ni tan obvia que delate la palabra,
    ni tan vaga que te haga parecer el impostor.
 5. **Votación** — todos votan (o saltan). Se puede cerrar antes desde el anfitrión.
@@ -150,7 +150,8 @@ No se puede pasar de ronda sin haber votado, ni cerrar una votación en la que n
 |---|---|---|
 | **Jugadores** | 3 – 20 | Cupos de la sala |
 | **Impostores** | 1 – ⌊(jugadores−1)/2⌋ | El tope se ajusta solo según cuántos haya conectados |
-| **Pista para el impostor** | sí / no | Le da una pista vaga sobre la palabra (ej: palabra *Titanic* → pista *"Un barco y un desastre"*) |
+| **Pista para el impostor** | sí / no | Le da una pista sobre la palabra |
+| **Dificultad de la pista** | fácil / media / difícil | Cuánta información entrega. *Karate*: «Artes marciales con cinturón y kata» → «Cinturón y kata» → «Cinturón» |
 | **Mostrar el tópico** | sí / no | Si está activo, al iniciar la partida todos ven de qué categoría es la palabra |
 | **Tiempo de debate** | 0 – 15 min | En 0 no hay cronómetro y avanzan cuando quieran |
 | **Tópicos** | 1 – 12 categorías | Se eligen tocando los chips |
@@ -160,10 +161,10 @@ No se puede pasar de ronda sin haber votado, ni cerrar una votación en la que n
 🎬 Películas · 🐾 Animales · 🍥 Anime · 🍕 Comida · ⚽ Deportes · 🌍 Países y Lugares
 👩‍⚕️ Profesiones · 🏠 Objetos de casa · 🎮 Videojuegos · 📺 Series de TV · 🎵 Música y Artistas · 🦸 Superhéroes
 
-**360 palabras**, cada una con su pista. Las pistas son concretas y apuntan a *esa*
-palabra, no a la categoría entera: *Karate → «Artes marciales con cinturón y kata»*.
-Hay pruebas que verifican que ninguna pista sea vaga, se repita, ni contenga la
-palabra que hay que adivinar. Para agregar más, edita `server/words.js`:
+**360 palabras** con **tres pistas cada una**, de más a menos información. Las pistas
+apuntan a *esa* palabra, no a la categoría entera. Hay pruebas que verifican que ningún
+nivel sea vago, se repita, contenga la palabra a adivinar, ni sea más largo que el
+anterior — y que la difícil sea siempre una sola palabra. Para agregar más, edita `server/words.js`:
 
 ```js
 {
@@ -171,7 +172,7 @@ palabra que hay que adivinar. Para agregar más, edita `server/words.js`:
   name: 'Mi Categoría',
   emoji: '🎯',
   words: [
-    'Palabra|pista vaga para el impostor',
+    'Palabra|pista fácil, descriptiva|pista media|difícil',
     // ...
   ]
 }
@@ -189,9 +190,11 @@ palabra que hay que adivinar. Para agregar más, edita `server/words.js`:
   permite, así funciona también donde el WebSocket está bloqueado (WiFi corporativo, colegios,
   algunas operadoras, VPNs).
 - **Reconexión**: la sesión queda guardada en `localStorage`; si se cierra el navegador, se
-  bloquea la pantalla o se pasa de WiFi a datos, al volver recupera la sala y su carta. En el
-  lobby hay 45 s de gracia antes de sacar a nadie, y si alguien se cae a mitad de ronda, la
-  partida sigue en vez de quedarse esperándolo.
+  bloquea la pantalla o se pasa de WiFi a datos, al volver recupera la sala y su carta.
+  Volver por el link de invitación **recupera el puesto en vez de pedir uno nuevo**, así que
+  funciona aunque la sala esté llena, y el inicio ofrece un botón «Volver a la sala».
+  En el lobby hay 45 s de gracia antes de sacar a nadie y 20 s durante el reparto de cartas;
+  en la votación, en cambio, se resuelve sin el que se cayó para no trabar al resto.
 - **La palabra nunca viaja de más**: el estado público que reciben todos no incluye la palabra,
   la pista ni quiénes son impostores. Cada jugador recibe su carta por un canal privado
   (hay pruebas que lo verifican).

@@ -33,6 +33,7 @@
       </div>
 
       <div class="stack">
+        <button class="btn btn-resume btn-lg" id="btn-resume" hidden>Volver a la sala</button>
         <button class="btn btn-primary btn-lg" id="btn-go-create">Crear sala</button>
         <button class="btn btn-ghost btn-lg" id="btn-go-join">Unirse a una sala</button>
       </div>
@@ -131,9 +132,22 @@
         <div class="setting">
           <div class="setting-label">
             <span class="setting-title">Pista para el impostor</span>
-            <span class="setting-desc">Le damos una pista vaga sobre la palabra</span>
+            <span class="setting-desc">Le damos una pista sobre la palabra</span>
           </div>
           <button class="switch" role="switch" aria-checked="true" data-toggle="hintEnabled"><span></span></button>
+        </div>
+
+        <div class="setting setting-stacked" id="row-hint-level">
+          <div class="setting-label">
+            <span class="setting-title">Dificultad de la pista</span>
+            <span class="setting-desc" id="desc-hint-level">Una descripción completa</span>
+          </div>
+          <div class="segmented" id="hint-level">
+            <button type="button" data-level="facil">Fácil</button>
+            <button type="button" data-level="media">Media</button>
+            <button type="button" data-level="dificil">Difícil</button>
+          </div>
+          <p class="hint-sample" id="hint-sample"></p>
         </div>
 
         <div class="setting">
@@ -260,11 +274,6 @@
       </div>
 
       <button class="btn btn-ghost peek" data-peek>👁️ Mantén presionado para ver tu carta</button>
-      <div class="peek-card" data-peek-card hidden>
-        <span class="peek-label"></span>
-        <span class="peek-word"></span>
-        <span class="peek-extra"></span>
-      </div>
     </div>
 
     <div class="screen-footer">
@@ -283,11 +292,6 @@
       <div class="vote-grid" id="vote-grid"></div>
 
       <button class="btn btn-ghost peek" data-peek>👁️ Mantén presionado para ver tu carta</button>
-      <div class="peek-card" data-peek-card hidden>
-        <span class="peek-label"></span>
-        <span class="peek-word"></span>
-        <span class="peek-extra"></span>
-      </div>
     </div>
     <div class="screen-footer">
       <button class="btn btn-ghost" id="btn-force-results" hidden>Cerrar votación</button>
@@ -332,6 +336,15 @@
     </div>
   </section>
 
+</div>
+
+<div id="peek-overlay" class="peek-overlay" hidden aria-hidden="true">
+  <div class="peek-card" id="peek-card">
+    <span class="peek-label" id="peek-label"></span>
+    <span class="peek-word" id="peek-word"></span>
+    <span class="peek-extra" id="peek-extra"></span>
+  </div>
+  <span class="peek-hint">Suelta para ocultarla</span>
 </div>
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>

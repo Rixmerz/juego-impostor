@@ -38,6 +38,7 @@
       maxPlayers: 8,
       impostors: 1,
       hintEnabled: true,
+      hintLevel: 'facil',
       showCategory: true,
       discussionSeconds: 180,
       categories: []
@@ -176,6 +177,21 @@
 
   /* ---------------- panel de configuración ---------------- */
 
+  var NIVELES = {
+    facil: { desc: 'Una descripción completa', descCorta: 'fácil', ejemplo: 'Artes marciales con cinturón y kata' },
+    media: { desc: 'Solo un par de señas', descCorta: 'media', ejemplo: 'Cinturón y kata' },
+    dificil: { desc: 'Una sola palabra', descCorta: 'difícil', ejemplo: 'Cinturón' }
+  };
+
+  $$('#hint-level button').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      state.draft.hintLevel = btn.dataset.level;
+      buzz(8);
+      renderConfigPanel();
+      pushConfigIfEditing();
+    });
+  });
+
   function renderConfigPanel() {
     var d = state.draft;
     $('#val-maxPlayers').textContent = d.maxPlayers;
@@ -189,6 +205,13 @@
     $$('.switch[data-toggle]').forEach(function (sw) {
       sw.setAttribute('aria-checked', d[sw.dataset.toggle] ? 'true' : 'false');
     });
+
+    $('#row-hint-level').hidden = !d.hintEnabled;
+    $$('#hint-level button').forEach(function (b) {
+      b.classList.toggle('is-on', b.dataset.level === d.hintLevel);
+    });
+    $('#desc-hint-level').textContent = NIVELES[d.hintLevel].desc;
+    $('#hint-sample').innerHTML = 'Por ejemplo, para <b>Karate</b>: «' + NIVELES[d.hintLevel].ejemplo + '»';
 
     $$('.step-btn').forEach(function (btn) {
       var key = btn.dataset.step;
@@ -211,6 +234,7 @@
         maxPlayers: state.draft.maxPlayers,
         impostors: state.draft.impostors,
         hintEnabled: state.draft.hintEnabled,
+        hintLevel: state.draft.hintLevel,
         showCategory: state.draft.showCategory,
         discussionSeconds: state.draft.discussionSeconds,
         categories: state.draft.categories
@@ -320,15 +344,37 @@
     });
   });
 
+  function guardarYEntrar(res, avisoPendiente) {
+    state.playerId = res.playerId;
+    state.token = res.token;
+    state.code = res.code;
+    state.invitacion = null;
+    saveSession();
+    show('lobby');
+    if (avisoPendiente && res.pending) toast('Hay una ronda en curso: entras en la siguiente');
+  }
+
   function entrarASala(code, name, onFail) {
+    var sess = readSession();
+    // Si ya teníamos puesto en esta sala, hay que recuperarlo. Pedir uno nuevo
+    // fallaba con "la sala está llena" justo cuando más falta hacía volver.
+    if (sess && sess.code === code && sess.playerId && sess.token) {
+      socket.emit('room:resume', sess, function (res) {
+        if (res && res.ok) {
+          guardarYEntrar(res, false);
+          toast('Volviste a la sala');
+          return;
+        }
+        pedirPuestoNuevo(code, name, onFail);
+      });
+      return;
+    }
+    pedirPuestoNuevo(code, name, onFail);
+  }
+
+  function pedirPuestoNuevo(code, name, onFail) {
     emit('room:join', { name: name, code: code }, function (res) {
-      state.playerId = res.playerId;
-      state.token = res.token;
-      state.code = res.code;
-      state.invitacion = null;
-      saveSession();
-      show('lobby');
-      if (res.pending) toast('Hay una ronda en curso: entras en la siguiente');
+      guardarYEntrar(res, true);
     }, onFail);
   }
 
@@ -371,6 +417,7 @@
     if (!confirm('¿Salir de la sala?')) return;
     socket.emit('room:leave', {}, function () {});
     clearSession();
+    pintarVolver();
     show('home');
   });
 
@@ -503,7 +550,7 @@
     $('#config-summary').innerHTML = [
       row('Jugadores', 'hasta ' + cfg.maxPlayers),
       row('Impostores', String(cfg.impostors)),
-      row('Pista al impostor', cfg.hintEnabled ? 'Sí' : 'No'),
+      row('Pista al impostor', cfg.hintEnabled ? 'Sí · ' + NIVELES[cfg.hintLevel].descCorta : 'No'),
       row('Mostrar tópico', cfg.showCategory ? 'Sí' : 'No'),
       row('Debate', cfg.discussionSeconds === 0 ? 'Libre' : fmtTime(cfg.discussionSeconds)),
       row('Tópicos', catNames.length === state.categories.length && state.categories.length
@@ -666,55 +713,52 @@
 
   /* --- Ver tu carta otra vez durante el debate y la votación --- */
 
-  function pintarPeek(root, priv) {
-    var box = root.querySelector('[data-peek-card]');
-    if (!priv) return null;
-    box.classList.toggle('is-impostor', priv.role === 'impostor');
+  var peekOverlay = $('#peek-overlay');
+  var peekCard = $('#peek-card');
+
+  function cerrarPeek() {
+    peekOverlay.hidden = true;
+    peekOverlay.setAttribute('aria-hidden', 'true');
+  }
+
+  function abrirPeek(e) {
+    if (e) e.preventDefault();
+    var priv = cartaVigente(state.room);
+    if (!priv) { toast('Tu carta llega en un momento'); return; }
+
+    peekCard.classList.toggle('is-impostor', priv.role === 'impostor');
     if (priv.role === 'impostor') {
-      box.querySelector('.peek-label').textContent = 'Eres el';
-      box.querySelector('.peek-word').textContent = 'IMPOSTOR';
-      box.querySelector('.peek-extra').innerHTML = priv.hint
-        ? 'Pista: <b>' + esc(priv.hint) + '</b>'
-        : '';
+      $('#peek-label').textContent = 'Eres el';
+      $('#peek-word').textContent = 'IMPOSTOR';
+      $('#peek-extra').innerHTML = priv.hint ? 'Pista: <b>' + esc(priv.hint) + '</b>' : '';
     } else {
-      box.querySelector('.peek-label').textContent = 'Tu palabra';
-      box.querySelector('.peek-word').textContent = priv.word || '—';
-      box.querySelector('.peek-extra').innerHTML = priv.categoryName
+      $('#peek-label').textContent = 'Tu palabra';
+      $('#peek-word').textContent = priv.word || '—';
+      $('#peek-extra').innerHTML = priv.categoryName
         ? esc(priv.categoryEmoji + ' ' + priv.categoryName)
         : '';
     }
-    return box;
+    peekOverlay.hidden = false;
+    peekOverlay.setAttribute('aria-hidden', 'false');
+    buzz(10);
   }
 
   $$('[data-peek]').forEach(function (btn) {
-    var root = btn.closest('.screen');
-    var box = root.querySelector('[data-peek-card]');
-    var abrir = function (e) {
-      e.preventDefault();
-      var priv = cartaVigente(state.room);
-      if (!priv) { toast('Tu carta llega en un momento'); return; }
-      pintarPeek(root, priv);
-      box.hidden = false;
-      btn.hidden = true;
-      buzz(10);
-    };
-    var cerrar = function () { box.hidden = true; btn.hidden = false; };
-
     ['pointerdown', 'touchstart'].forEach(function (ev) {
-      btn.addEventListener(ev, abrir, { passive: false });
+      btn.addEventListener(ev, abrirPeek, { passive: false });
     });
     ['pointerup', 'pointercancel', 'pointerleave', 'touchend', 'touchcancel'].forEach(function (ev) {
-      btn.addEventListener(ev, cerrar);
-      box.addEventListener(ev, cerrar);
+      btn.addEventListener(ev, cerrarPeek);
     });
-    window.addEventListener('blur', cerrar);
-    document.addEventListener('visibilitychange', function () { if (document.hidden) cerrar(); });
   });
 
-  function resetPeeks() {
-    $$('[data-peek-card]').forEach(function (b) { b.hidden = true; });
-    $$('[data-peek]').forEach(function (b) { b.hidden = false; });
-  }
+  ['pointerup', 'pointercancel', 'touchend', 'touchcancel'].forEach(function (ev) {
+    peekOverlay.addEventListener(ev, cerrarPeek);
+  });
+  window.addEventListener('blur', cerrarPeek);
+  document.addEventListener('visibilitychange', function () { if (document.hidden) cerrarPeek(); });
+
+  function resetPeeks() { cerrarPeek(); }
 
   function renderDiscussion(room) {
     var banner = $('#topic-banner');
@@ -902,7 +946,8 @@
           saveSession();
         } else {
           clearSession();
-          if (['lobby', 'reveal', 'discussion', 'voting', 'results'].indexOf(activeScreen()) >= 0) {
+          pintarVolver();
+          if (['lobby', 'reveal', 'discussion', 'voting', 'results', 'waiting'].indexOf(activeScreen()) >= 0) {
             show('home');
           }
         }
@@ -934,6 +979,7 @@
 
   socket.on('room:kicked', function () {
     clearSession();
+    pintarVolver();
     show('home');
     toast('El anfitrión te sacó de la sala', true);
   });
@@ -944,11 +990,35 @@
 
   /* ---------------- arranque ---------------- */
 
+  function pintarVolver() {
+    var btn = $('#btn-resume');
+    var sess = readSession();
+    var dentro = state.code && state.room;
+    if (sess && sess.code && !dentro) {
+      btn.hidden = false;
+      btn.textContent = 'Volver a la sala ' + sess.code;
+    } else {
+      btn.hidden = true;
+    }
+  }
+
+  $('#btn-resume').addEventListener('click', function () {
+    var sess = readSession();
+    if (!sess || !sess.code) { pintarVolver(); return; }
+    socket.emit('room:resume', sess, function (res) {
+      if (res && res.ok) { guardarYEntrar(res, false); return; }
+      toast((res && res.error) || 'Esa sala ya no existe', true);
+      clearSession();
+      pintarVolver();
+    });
+  });
+
   function boot() {
     try {
       var saved = localStorage.getItem(STORAGE_NAME);
       if (saved) $('#input-name').value = saved;
     } catch (e) {}
+    pintarVolver();
 
     var params = new URLSearchParams(location.search);
     var sala = (params.get('sala') || params.get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);

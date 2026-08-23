@@ -216,6 +216,11 @@ input::placeholder { color: var(--text-faint); }
 }
 .btn-primary:disabled { box-shadow: none; }
 .btn-ghost { background: var(--surface); border: 1px solid var(--border); }
+.btn-resume {
+  background: rgba(53, 209, 155, 0.16);
+  color: var(--success);
+  border: 1px solid rgba(53, 209, 155, 0.35);
+}
 .btn-danger { background: rgba(255, 77, 109, 0.16); color: var(--danger); border: 1px solid rgba(255, 77, 109, 0.3); }
 
 .link-btn {
@@ -346,6 +351,45 @@ input::placeholder { color: var(--text-faint); }
 }
 .switch[aria-checked="true"] { background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
 .switch[aria-checked="true"] span { transform: translateX(22px); }
+
+.setting-stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.segmented {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+  background: var(--surface-2);
+  border-radius: 999px;
+  padding: 3px;
+}
+.segmented button {
+  min-height: 40px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.segmented button.is-on {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: var(--text);
+}
+.hint-sample {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-faint);
+  line-height: 1.35;
+  min-height: 17px;
+}
+.hint-sample b { color: var(--text-dim); font-weight: 600; }
 
 /* ---------- Chips de categorías ---------- */
 
@@ -552,26 +596,63 @@ input::placeholder { color: var(--text-faint); }
 .timer.is-low .timer-value { color: var(--danger); animation: pulse 1s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: 0.45; } }
 
-.peek { margin-top: 2px; font-size: 14px; min-height: 46px; }
-.peek-card {
+.peek {
+  margin-top: 2px;
+  font-size: 14px;
+  min-height: 46px;
+  /* En iOS un long-press abre el menú de selección del sistema y eso cerraría
+     la carta justo mientras la estás mirando. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+}
+.peek-overlay, .peek-card {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* La carta se muestra sobre TODO, centrada en la pantalla: antes se desplegaba
+   debajo del botón y quedaba cortada fuera del área visible. */
+.peek-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 18px 16px;
-  border-radius: var(--radius);
+  justify-content: center;
+  gap: 14px;
+  padding: calc(24px + var(--safe-top)) 20px calc(24px + var(--safe-bottom));
+  background: rgba(8, 6, 20, 0.94);
+  backdrop-filter: blur(6px);
+  animation: screen-in 0.16s ease;
+}
+.peek-card {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 34px 22px;
+  border-radius: 24px;
   background: linear-gradient(150deg, #1c1740, #2f1c56);
   border: 1px solid rgba(177, 77, 255, 0.45);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
   text-align: center;
 }
 .peek-card.is-impostor {
   background: linear-gradient(150deg, #4a0f22, #7a1233);
   border-color: rgba(255, 77, 109, 0.6);
 }
-.peek-label { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-dim); }
-.peek-word { font-size: 26px; font-weight: 800; word-break: break-word; }
-.peek-extra { font-size: 13px; color: var(--text-dim); }
+.peek-label { font-size: 12px; letter-spacing: 2.5px; text-transform: uppercase; color: var(--text-dim); }
+.peek-word { font-size: 32px; font-weight: 800; line-height: 1.15; word-break: break-word; }
+.peek-extra { font-size: 14px; color: var(--text-dim); line-height: 1.4; }
 .peek-extra b { color: var(--text); }
+.peek-hint { font-size: 13px; color: var(--text-faint); }
 
 /* ---------- Votación ---------- */
 

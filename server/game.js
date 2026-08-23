@@ -1,7 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
-const { CATEGORY_BY_ID, CATEGORY_INDEX } = require('./words');
+const { CATEGORY_BY_ID, CATEGORY_INDEX, HINT_LEVEL_IDS } = require('./words');
 
 const MIN_PLAYERS = 3;
 const MAX_PLAYERS_CAP = 20;
@@ -48,6 +48,7 @@ function defaultConfig() {
     maxPlayers: 8,
     impostors: 1,
     hintEnabled: true,
+    hintLevel: 'facil',
     showCategory: true,
     categories: CATEGORY_INDEX.map((c) => c.id),
     discussionSeconds: 180
@@ -68,6 +69,9 @@ function normalizeConfig(input, current) {
       if (Number.isFinite(n)) next.impostors = Math.max(1, Math.round(n));
     }
     if (input.hintEnabled !== undefined) next.hintEnabled = Boolean(input.hintEnabled);
+    if (input.hintLevel !== undefined && HINT_LEVEL_IDS.indexOf(input.hintLevel) >= 0) {
+      next.hintLevel = input.hintLevel;
+    }
     if (input.showCategory !== undefined) next.showCategory = Boolean(input.showCategory);
     if (input.discussionSeconds !== undefined) {
       const n = Number(input.discussionSeconds);
@@ -223,7 +227,8 @@ class Room {
       categoryName: category.name,
       categoryEmoji: category.emoji,
       word: entry.word,
-      hint: entry.hint,
+      hints: entry.hints,
+      hint: entry.hints[this.config.hintLevel] || entry.hints.facil,
       impostorIds,
       participants: new Set(players.map((p) => p.id)),
       revealed: new Set(),
@@ -418,6 +423,7 @@ class Room {
       word: isImpostor ? null : this.round.word,
       hint: isImpostor && this.config.hintEnabled ? this.round.hint : null,
       hintEnabled: this.config.hintEnabled,
+      hintLevel: this.config.hintLevel,
       categoryName: showCategory ? this.round.categoryName : null,
       categoryEmoji: showCategory ? this.round.categoryEmoji : null,
       impostorCount: this.config.impostors,

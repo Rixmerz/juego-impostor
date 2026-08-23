@@ -81,37 +81,83 @@ console.log('\nBanco de palabras');
 
 const limpia = (t) => String(t).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-test('toda palabra tiene una pista concreta', () => {
+test('toda palabra tiene los tres niveles de pista', () => {
+  const { CATEGORIES, HINT_LEVEL_IDS } = require('../server/words');
+  const faltan = [];
+  for (const cat of CATEGORIES) {
+    for (const e of cat.words) {
+      for (const nivel of HINT_LEVEL_IDS) {
+        if (!e.hints[nivel] || !e.hints[nivel].trim()) faltan.push(cat.name + ': ' + e.word + ' (' + nivel + ')');
+      }
+    }
+  }
+  assert.deepStrictEqual(faltan, [], 'pistas ausentes');
+});
+
+test('cada nivel es más escueto que el anterior', () => {
+  const { CATEGORIES } = require('../server/words');
+  const malas = [];
+  for (const cat of CATEGORIES) {
+    for (const e of cat.words) {
+      const palabras = (t) => t.split(/\s+/).length;
+      if (palabras(e.hints.media) > palabras(e.hints.facil)) malas.push(cat.name + ': ' + e.word + ' (media ≥ fácil)');
+      if (palabras(e.hints.dificil) > palabras(e.hints.media)) malas.push(cat.name + ': ' + e.word + ' (difícil ≥ media)');
+      if (palabras(e.hints.dificil) !== 1) malas.push(cat.name + ': ' + e.word + ' → difícil no es una sola palabra: "' + e.hints.dificil + '"');
+    }
+  }
+  assert.deepStrictEqual(malas, [], 'los niveles no van de más a menos');
+});
+
+test('la pista fácil es de verdad descriptiva', () => {
   const { CATEGORIES } = require('../server/words');
   const cortas = [];
   for (const cat of CATEGORIES) {
     for (const e of cat.words) {
-      if (!e.hint || e.hint.length < 12) cortas.push(cat.name + ': ' + e.word);
+      if (e.hints.facil.length < 12) cortas.push(cat.name + ': ' + e.word);
     }
   }
-  assert.deepStrictEqual(cortas, [], 'pistas demasiado vagas');
+  assert.deepStrictEqual(cortas, [], 'pistas fáciles demasiado vagas');
 });
 
-test('ninguna pista contiene la palabra que hay que adivinar', () => {
-  const { CATEGORIES } = require('../server/words');
+test('ninguna pista, en ningún nivel, contiene la palabra que hay que adivinar', () => {
+  const { CATEGORIES, HINT_LEVEL_IDS } = require('../server/words');
   const delatan = [];
   for (const cat of CATEGORIES) {
     for (const e of cat.words) {
-      const pista = limpia(e.hint);
-      for (const parte of limpia(e.word).split(/[^a-z0-9]+/).filter((x) => x.length > 3)) {
-        if (pista.includes(parte)) delatan.push(cat.name + ': ' + e.word + ' → ' + e.hint);
+      for (const nivel of HINT_LEVEL_IDS) {
+        const pista = limpia(e.hints[nivel]);
+        for (const parte of limpia(e.word).split(/[^a-z0-9]+/).filter((x) => x.length > 3)) {
+          if (pista.includes(parte)) delatan.push(cat.name + ': ' + e.word + ' (' + nivel + ') → ' + e.hints[nivel]);
+        }
       }
     }
   }
   assert.deepStrictEqual(delatan, [], 'la pista regala la respuesta');
 });
 
-test('las pistas no se repiten dentro de una categoría', () => {
+test('las pistas fáciles no se repiten dentro de una categoría', () => {
   const { CATEGORIES } = require('../server/words');
   for (const cat of CATEGORIES) {
-    const vistas = new Set(cat.words.map((e) => limpia(e.hint)));
+    const vistas = new Set(cat.words.map((e) => limpia(e.hints.facil)));
     assert.strictEqual(vistas.size, cat.words.length, 'pistas repetidas en ' + cat.name);
   }
+});
+
+test('el nivel de pista elegido es el que recibe el impostor', () => {
+  const { CATEGORIES } = require('../server/words');
+  for (const nivel of ['facil', 'media', 'dificil']) {
+    const { room } = roomWith(4, { hintLevel: nivel, categories: ['deportes'] });
+    room.startRound();
+    const impostorId = Array.from(room.round.impostorIds)[0];
+    const entrada = CATEGORIES.find((c) => c.id === 'deportes').words.find((w) => w.word === room.round.word);
+    assert.strictEqual(room.privateState(impostorId).hint, entrada.hints[nivel],
+      'con dificultad ' + nivel + ' debe llegar esa pista');
+  }
+});
+
+test('un nivel de pista inválido no rompe la configuración', () => {
+  const cfg = normalizeConfig({ hintLevel: 'imposible' });
+  assert.strictEqual(cfg.hintLevel, 'facil');
 });
 
 console.log('\nSala y jugadores');
@@ -169,6 +215,7 @@ test('con pista activada el impostor recibe una pista', () => {
   const impostorId = Array.from(room.round.impostorIds)[0];
   const view = room.privateState(impostorId);
   assert.ok(view.hint && view.hint.length > 0, 'debería haber pista');
+  assert.strictEqual(view.hintLevel, 'facil', 'por defecto la pista es la fácil');
 });
 
 test('con pista desactivada el impostor no recibe nada', () => {

@@ -109,17 +109,103 @@ const URL = process.env.URL || 'http://localhost:3000';
   await host.waitForSelector('#screen-discussion.is-active', { timeout: 8000 });
   const suPalabra = await host.evaluate(() => document.querySelector('#role-word').textContent.trim());
   const btnPeek = '#screen-discussion [data-peek]';
-  const boxPeek = '#screen-discussion [data-peek-card]';
   check(await host.isVisible(btnPeek), 'en el debate hay un botón para reconsultar la carta');
-  await host.$eval(btnPeek, (el) => el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })));
-  await host.waitForTimeout(300);
-  const visto = await host.textContent(boxPeek + ' .peek-word');
-  check(visto.trim() === suPalabra, 'muestra la misma carta de esta ronda (vio "' + visto.trim() + '")');
-  await host.$eval(boxPeek, (el) => el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true })));
-  await host.waitForTimeout(200);
-  check(await host.isHidden(boxPeek), 'al soltar, la carta se vuelve a ocultar');
 
-  console.log('\n5. Sesión: perder conexión y volver');
+  // La carta va sobre toda la pantalla: antes se desplegaba debajo del botón
+  // y quedaba cortada fuera del área visible.
+  const geo = await host.evaluate(() => {
+    document.querySelector('#screen-discussion [data-peek]')
+      .dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    const ov = document.getElementById('peek-overlay');
+    const r = document.getElementById('peek-card').getBoundingClientRect();
+    return {
+      abierta: !ov.hidden,
+      fija: getComputedStyle(ov).position === 'fixed',
+      cabeEntera: r.top >= 0 && r.bottom <= window.innerHeight && r.left >= 0 && r.right <= window.innerWidth,
+      alto: Math.round(r.height),
+      vh: window.innerHeight,
+      palabra: document.getElementById('peek-word').textContent.trim()
+    };
+  });
+  check(geo.abierta && geo.fija, 'se abre sobre toda la pantalla');
+  check(geo.cabeEntera, 'la carta cabe entera sin scroll (' + geo.alto + 'px en ' + geo.vh + 'px)');
+  check(geo.palabra === suPalabra, 'muestra la misma carta de esta ronda (vio "' + geo.palabra + '")');
+  await host.evaluate(() => document.getElementById('peek-overlay')
+    .dispatchEvent(new PointerEvent('pointerup', { bubbles: true })));
+  await host.waitForTimeout(200);
+  check(await host.isHidden('#peek-overlay'), 'al soltar, la carta se vuelve a ocultar');
+
+  console.log('\n5. Dificultad de la pista');
+  {
+    const p = await nuevo();
+    await p.goto(URL, { waitUntil: 'networkidle' });
+    await p.fill('#input-name', 'Eva');
+    await p.click('#btn-go-create');
+    await p.waitForSelector('#screen-create.is-active');
+    await p.waitForFunction(() => document.querySelectorAll('.chip').length > 0);
+    check(await p.isVisible('#hint-level'), 'hay selector de dificultad');
+    for (const [nivel, esperado] of [['facil', 'Artes marciales'], ['media', 'Cinturón y kata'], ['dificil', 'Cinturón»']]) {
+      await p.click('#hint-level button[data-level="' + nivel + '"]');
+      const muestra = (await p.textContent('#hint-sample')).trim();
+      check(muestra.includes(esperado), nivel + ' → ' + muestra.replace('Por ejemplo, para Karate: ', ''));
+    }
+    await p.click('.switch[data-toggle="hintEnabled"]');
+    check(await p.isHidden('#hint-level'), 'sin pista, el selector se oculta');
+    await p.context().close();
+  }
+
+  console.log('\n6. Reconectar con el link estando la sala llena');
+  {
+    const a = await nuevo();
+    await a.goto(URL, { waitUntil: 'networkidle' });
+    await a.fill('#input-name', 'Ana');
+    await a.click('#btn-go-create');
+    await a.waitForSelector('#screen-create.is-active');
+    await a.waitForFunction(() => document.querySelectorAll('.chip').length > 0);
+    for (let i = 0; i < 5; i++) await a.click('.step-btn[data-step="maxPlayers"][data-delta="-1"]');
+    await a.click('#btn-create');
+    await a.waitForSelector('#screen-lobby.is-active');
+    const sala = (await a.textContent('#room-code')).trim();
+    check((await a.textContent('#player-count')).trim() === '1/3', 'sala con 3 cupos');
+
+    const b2 = await nuevo(); const c2 = await nuevo();
+    for (const [p, n] of [[b2, 'Beto'], [c2, 'Caro']]) {
+      await p.goto(URL, { waitUntil: 'networkidle' });
+      await p.fill('#input-name', n);
+      await p.click('#btn-go-join');
+      await p.fill('#input-code', sala);
+      await p.click('#btn-join');
+      await p.waitForSelector('#screen-lobby.is-active');
+    }
+    await a.waitForFunction(() => document.querySelectorAll('#players .player').length === 3);
+    await a.click('#btn-start');
+    await b2.waitForSelector('#screen-reveal.is-active');
+
+    // Beto pierde la conexión y reabre el link de invitación con la sala llena.
+    await b2.context().setOffline(true);
+    await b2.waitForTimeout(1000);
+    await b2.context().setOffline(false);
+    await b2.goto(URL + '/?sala=' + sala, { waitUntil: 'networkidle' });
+    let volvio = false;
+    try {
+      await b2.waitForFunction(() => {
+        const act = document.querySelector('.screen.is-active');
+        return act && ['screen-reveal', 'screen-discussion', 'screen-lobby', 'screen-voting', 'screen-results'].includes(act.id);
+      }, { timeout: 15000 });
+      volvio = true;
+    } catch (e) { /* se quedó afuera */ }
+    check(volvio, 'vuelve con el link aunque la sala esté llena');
+    const aviso = await b2.textContent('#toast');
+    check(!/llena/i.test(aviso), 'no dice "la sala está llena" (dijo: "' + aviso.trim() + '")');
+
+    // Y el inicio ofrece volver.
+    await b2.goto(URL, { waitUntil: 'networkidle' });
+    await b2.waitForTimeout(700);
+    const volver = (await b2.textContent('#btn-resume')).trim();
+    check(/Volver a la sala/.test(volver), 'el inicio ofrece "' + volver + '"');
+  }
+
+  console.log('\n7. Sesión: perder conexión y volver');
   await inv.context().setOffline(true);
   await inv.waitForTimeout(1500);
   await inv.context().setOffline(false);
