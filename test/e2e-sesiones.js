@@ -144,7 +144,7 @@ const URL = process.env.URL || 'http://localhost:3000';
     await p.waitForSelector('#screen-create.is-active');
     await p.waitForFunction(() => document.querySelectorAll('.chip').length > 0);
     check(await p.isVisible('#hint-level'), 'hay selector de dificultad');
-    for (const [nivel, esperado] of [['facil', 'Artes marciales'], ['media', 'Cinturón y kata'], ['dificil', 'Cinturón»']]) {
+    for (const [nivel, esperado] of [['facil', 'se pelea sin armas'], ['media', 'Oriental y sin armas'], ['dificil', 'Disciplina»']]) {
       await p.click('#hint-level button[data-level="' + nivel + '"]');
       const muestra = (await p.textContent('#hint-sample')).trim();
       check(muestra.includes(esperado), nivel + ' → ' + muestra.replace('Por ejemplo, para Karate: ', ''));
@@ -250,7 +250,7 @@ const URL = process.env.URL || 'http://localhost:3000';
       ejemplo: document.getElementById('hint-sample').textContent.trim()
     }));
     check(tras.marcado, 'al tocar "Difícil" queda marcado');
-    check(/Cinturón»/.test(tras.ejemplo), 'y el ejemplo cambia: ' + tras.ejemplo.replace('Por ejemplo, para Karate: ', ''));
+    check(/Disciplina»/.test(tras.ejemplo), 'y el ejemplo cambia: ' + tras.ejemplo.replace('Por ejemplo, para Karate: ', ''));
     await ctx.close();
   }
 

@@ -178,9 +178,9 @@
   /* ---------------- panel de configuración ---------------- */
 
   var NIVELES = {
-    facil: { desc: 'Una descripción completa', descCorta: 'fácil', ejemplo: 'Artes marciales con cinturón y kata' },
-    media: { desc: 'Solo un par de señas', descCorta: 'media', ejemplo: 'Cinturón y kata' },
-    dificil: { desc: 'Una sola palabra', descCorta: 'difícil', ejemplo: 'Cinturón' }
+    facil: { desc: 'Orienta sin regalar la respuesta', descCorta: 'fácil', ejemplo: 'Disciplina oriental donde se pelea sin armas' },
+    media: { desc: 'Solo un par de señas', descCorta: 'media', ejemplo: 'Oriental y sin armas' },
+    dificil: { desc: 'Una sola palabra', descCorta: 'difícil', ejemplo: 'Disciplina' }
   };
 
   $$('#hint-level button').forEach(function (btn) {

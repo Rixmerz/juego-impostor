@@ -151,7 +151,7 @@ No se puede pasar de ronda sin haber votado, ni cerrar una votación en la que n
 | **Jugadores** | 3 – 20 | Cupos de la sala |
 | **Impostores** | 1 – ⌊(jugadores−1)/2⌋ | El tope se ajusta solo según cuántos haya conectados |
 | **Pista para el impostor** | sí / no | Le da una pista sobre la palabra |
-| **Dificultad de la pista** | fácil / media / difícil | Cuánta información entrega. *Karate*: «Artes marciales con cinturón y kata» → «Cinturón y kata» → «Cinturón» |
+| **Dificultad de la pista** | fácil / media / difícil | Cuánta información entrega. *Karate*: «Disciplina oriental donde se pelea sin armas» → «Oriental y sin armas» → «Disciplina» |
 | **Mostrar el tópico** | sí / no | Si está activo, al iniciar la partida todos ven de qué categoría es la palabra |
 | **Tiempo de debate** | 0 – 15 min | En 0 no hay cronómetro y avanzan cuando quieran |
 | **Tópicos** | 1 – 12 categorías | Se eligen tocando los chips |
@@ -161,8 +161,9 @@ No se puede pasar de ronda sin haber votado, ni cerrar una votación en la que n
 🎬 Películas · 🐾 Animales · 🍥 Anime · 🍕 Comida · ⚽ Deportes · 🌍 Países y Lugares
 👩‍⚕️ Profesiones · 🏠 Objetos de casa · 🎮 Videojuegos · 📺 Series de TV · 🎵 Música y Artistas · 🦸 Superhéroes
 
-**360 palabras** con **tres pistas cada una**, de más a menos información. Las pistas
-apuntan a *esa* palabra, no a la categoría entera. Hay pruebas que verifican que ningún
+**360 palabras** con **tres pistas cada una**, de más a menos información. Ninguna nombra
+los objetos que identifican la palabra: dicen qué se hace o qué se siente, para que el
+impostor pueda disimular sin saber la respuesta. Hay pruebas que verifican que ningún
 nivel sea vago, se repita, contenga la palabra a adivinar, ni sea más largo que el
 anterior — y que la difícil sea siempre una sola palabra. Para agregar más, edita `server/words.js`:
 
