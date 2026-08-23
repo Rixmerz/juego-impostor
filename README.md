@@ -125,12 +125,16 @@ Si prefieres crear el servicio a mano en vez de usar el blueprint:
    - Tripulantes: ven la palabra.
    - Impostores: ven que lo son, y la pista si está activada.
 4. **Debate** — se muestra el tópico, el orden para hablar y un cronómetro.
+   En el debate y en la votación puedes **volver a ver tu carta** manteniendo presionado,
+   por si te desconectaste o simplemente se te olvidó.
    Cada uno dice **una sola palabra** relacionada: ni tan obvia que delate la palabra,
    ni tan vaga que te haga parecer el impostor.
 5. **Votación** — todos votan (o saltan). Se puede cerrar antes desde el anfitrión.
 6. **Resultados** — se revela la palabra, quiénes eran impostores y el marcador.
 
 ### Puntaje
+
+No se puede pasar de ronda sin haber votado, ni cerrar una votación en la que nadie votó.
 
 | Situación | Puntos |
 |---|---|
@@ -156,7 +160,10 @@ Si prefieres crear el servicio a mano en vez de usar el blueprint:
 🎬 Películas · 🐾 Animales · 🍥 Anime · 🍕 Comida · ⚽ Deportes · 🌍 Países y Lugares
 👩‍⚕️ Profesiones · 🏠 Objetos de casa · 🎮 Videojuegos · 📺 Series de TV · 🎵 Música y Artistas · 🦸 Superhéroes
 
-**360 palabras**, cada una con su pista. Para agregar más, edita `server/words.js`:
+**360 palabras**, cada una con su pista. Las pistas son concretas y apuntan a *esa*
+palabra, no a la categoría entera: *Karate → «Artes marciales con cinturón y kata»*.
+Hay pruebas que verifican que ninguna pista sea vaga, se repita, ni contenga la
+palabra que hay que adivinar. Para agregar más, edita `server/words.js`:
 
 ```js
 {

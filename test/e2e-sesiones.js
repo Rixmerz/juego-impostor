@@ -86,13 +86,40 @@ const URL = process.env.URL || 'http://localhost:3000';
   const botones = await host.$$eval('.vote-btn:not(.is-skip)', (els) => els.length);
   check(botones === 3, 'la votación lista solo a los 3 que juegan (vio ' + botones + ')');
 
+  // Sin un solo voto no se puede cerrar la votación.
+  check(await host.isDisabled('#btn-force-results'), 'no deja cerrar una votación en la que nadie votó');
+  await host.evaluate(() => {
+    const b = [...document.querySelectorAll('.vote-btn')].find((x) => x.classList.contains('is-skip'));
+    b.click();
+  });
+  await host.waitForTimeout(400);
+  check(!(await host.isDisabled('#btn-force-results')), 'con al menos un voto ya se puede cerrar');
+
   await host.click('#btn-force-results');
   await host.waitForSelector('#screen-results.is-active', { timeout: 6000 });
   await host.click('#btn-next-round');
   await tarde.waitForSelector('#screen-reveal.is-active', { timeout: 8000 });
   ok('en la ronda 2 el que esperaba ya recibe carta');
 
-  console.log('\n4. Sesión: perder conexión y volver');
+  console.log('\n4. Volver a ver tu carta si te caes');
+  for (const p of [host, inv, auto, tarde]) {
+    await p.$eval('#reveal-card', (el) => el.classList.remove('is-open'));
+    await p.click('#btn-ready');
+  }
+  await host.waitForSelector('#screen-discussion.is-active', { timeout: 8000 });
+  const suPalabra = await host.evaluate(() => document.querySelector('#role-word').textContent.trim());
+  const btnPeek = '#screen-discussion [data-peek]';
+  const boxPeek = '#screen-discussion [data-peek-card]';
+  check(await host.isVisible(btnPeek), 'en el debate hay un botón para reconsultar la carta');
+  await host.$eval(btnPeek, (el) => el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })));
+  await host.waitForTimeout(300);
+  const visto = await host.textContent(boxPeek + ' .peek-word');
+  check(visto.trim() === suPalabra, 'muestra la misma carta de esta ronda (vio "' + visto.trim() + '")');
+  await host.$eval(boxPeek, (el) => el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true })));
+  await host.waitForTimeout(200);
+  check(await host.isHidden(boxPeek), 'al soltar, la carta se vuelve a ocultar');
+
+  console.log('\n5. Sesión: perder conexión y volver');
   await inv.context().setOffline(true);
   await inv.waitForTimeout(1500);
   await inv.context().setOffline(false);

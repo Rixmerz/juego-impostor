@@ -446,6 +446,7 @@
         $('#btn-ready').textContent = 'Ya la vi';
         buzz([20, 60, 20]);
       }
+      resetPeeks();
       if (phase === 'voting') buzz([30, 50, 30]);
       if (phase === 'results') buzz([40, 60, 40, 60, 80]);
     }
@@ -598,6 +599,19 @@
     return el;
   }
 
+  /**
+   * La carta privada solo vale si corresponde a la ronda que se está mostrando.
+   * Si llega desfasada, preferimos no pintar nada antes que enseñar la palabra
+   * o la pista de la ronda anterior.
+   */
+  function cartaVigente(room) {
+    var priv = state.priv;
+    if (!priv || priv.pending) return null;
+    if (!room || !room.round) return null;
+    if (priv.round !== room.round.number) return null;
+    return priv;
+  }
+
   function renderWaiting(room) {
     var fase = {
       reveal: 'Están viendo sus cartas.',
@@ -619,7 +633,7 @@
     $('#reveal-round').textContent = 'Ronda ' + room.round.number;
     $('#reveal-progress').textContent = room.round.revealedCount + ' de ' + room.round.totalPlayers + ' listos';
 
-    var priv = state.priv;
+    var priv = cartaVigente(room);
     if (!priv) return;
 
     card.classList.toggle('is-impostor', priv.role === 'impostor');
@@ -648,6 +662,58 @@
       $('#btn-ready').disabled = true;
       $('#btn-ready').textContent = 'Esperando al resto…';
     }
+  }
+
+  /* --- Ver tu carta otra vez durante el debate y la votación --- */
+
+  function pintarPeek(root, priv) {
+    var box = root.querySelector('[data-peek-card]');
+    if (!priv) return null;
+    box.classList.toggle('is-impostor', priv.role === 'impostor');
+    if (priv.role === 'impostor') {
+      box.querySelector('.peek-label').textContent = 'Eres el';
+      box.querySelector('.peek-word').textContent = 'IMPOSTOR';
+      box.querySelector('.peek-extra').innerHTML = priv.hint
+        ? 'Pista: <b>' + esc(priv.hint) + '</b>'
+        : '';
+    } else {
+      box.querySelector('.peek-label').textContent = 'Tu palabra';
+      box.querySelector('.peek-word').textContent = priv.word || '—';
+      box.querySelector('.peek-extra').innerHTML = priv.categoryName
+        ? esc(priv.categoryEmoji + ' ' + priv.categoryName)
+        : '';
+    }
+    return box;
+  }
+
+  $$('[data-peek]').forEach(function (btn) {
+    var root = btn.closest('.screen');
+    var box = root.querySelector('[data-peek-card]');
+    var abrir = function (e) {
+      e.preventDefault();
+      var priv = cartaVigente(state.room);
+      if (!priv) { toast('Tu carta llega en un momento'); return; }
+      pintarPeek(root, priv);
+      box.hidden = false;
+      btn.hidden = true;
+      buzz(10);
+    };
+    var cerrar = function () { box.hidden = true; btn.hidden = false; };
+
+    ['pointerdown', 'touchstart'].forEach(function (ev) {
+      btn.addEventListener(ev, abrir, { passive: false });
+    });
+    ['pointerup', 'pointercancel', 'pointerleave', 'touchend', 'touchcancel'].forEach(function (ev) {
+      btn.addEventListener(ev, cerrar);
+      box.addEventListener(ev, cerrar);
+    });
+    window.addEventListener('blur', cerrar);
+    document.addEventListener('visibilitychange', function () { if (document.hidden) cerrar(); });
+  });
+
+  function resetPeeks() {
+    $$('[data-peek-card]').forEach(function (b) { b.hidden = true; });
+    $$('[data-peek]').forEach(function (b) { b.hidden = false; });
   }
 
   function renderDiscussion(room) {
@@ -699,7 +765,12 @@
 
   function renderVoting(room) {
     $('#vote-progress').textContent = room.round.voteCount + ' de ' + room.round.totalPlayers + ' votaron';
-    $('#btn-force-results').hidden = !state.isHost;
+    var cerrar = $('#btn-force-results');
+    cerrar.hidden = !state.isHost;
+    cerrar.disabled = room.round.voteCount === 0;
+    cerrar.textContent = room.round.voteCount === 0
+      ? 'Nadie ha votado todavía'
+      : 'Cerrar votación (' + room.round.voteCount + '/' + room.round.totalPlayers + ')';
 
     var grid = $('#vote-grid');
     grid.innerHTML = '';

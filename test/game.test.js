@@ -77,6 +77,43 @@ test('los toggles de pista y tópico se guardan', () => {
   assert.strictEqual(cfg.showCategory, false);
 });
 
+console.log('\nBanco de palabras');
+
+const limpia = (t) => String(t).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+test('toda palabra tiene una pista concreta', () => {
+  const { CATEGORIES } = require('../server/words');
+  const cortas = [];
+  for (const cat of CATEGORIES) {
+    for (const e of cat.words) {
+      if (!e.hint || e.hint.length < 12) cortas.push(cat.name + ': ' + e.word);
+    }
+  }
+  assert.deepStrictEqual(cortas, [], 'pistas demasiado vagas');
+});
+
+test('ninguna pista contiene la palabra que hay que adivinar', () => {
+  const { CATEGORIES } = require('../server/words');
+  const delatan = [];
+  for (const cat of CATEGORIES) {
+    for (const e of cat.words) {
+      const pista = limpia(e.hint);
+      for (const parte of limpia(e.word).split(/[^a-z0-9]+/).filter((x) => x.length > 3)) {
+        if (pista.includes(parte)) delatan.push(cat.name + ': ' + e.word + ' → ' + e.hint);
+      }
+    }
+  }
+  assert.deepStrictEqual(delatan, [], 'la pista regala la respuesta');
+});
+
+test('las pistas no se repiten dentro de una categoría', () => {
+  const { CATEGORIES } = require('../server/words');
+  for (const cat of CATEGORIES) {
+    const vistas = new Set(cat.words.map((e) => limpia(e.hint)));
+    assert.strictEqual(vistas.size, cat.words.length, 'pistas repetidas en ' + cat.name);
+  }
+});
+
 console.log('\nSala y jugadores');
 
 test('el primero en entrar es el anfitrión', () => {
@@ -256,6 +293,33 @@ test('las rondas siguientes reparten roles nuevos', () => {
   assert.strictEqual(players.length, 5);
 });
 
+console.log('\nNo saltarse la votación');
+
+test('no se puede arrancar otra ronda sin haber votado', () => {
+  const { room, players } = roomWith(4);
+  room.startRound();
+  // El servidor es quien exige la fase; aquí comprobamos el invariante del juego:
+  // los resultados solo existen después de resolver los votos.
+  assert.strictEqual(room.phase, PHASES.REVEAL);
+  assert.strictEqual(room.round.result, null);
+  players.forEach((p) => room.markRevealed(p.id));
+  assert.strictEqual(room.phase, PHASES.DISCUSSION);
+  assert.strictEqual(room.round.result, null);
+  room.beginVoting();
+  assert.strictEqual(room.round.result, null, 'sin votos no hay resultado');
+});
+
+test('la carta privada dice a qué ronda pertenece', () => {
+  const { room, players } = roomWith(4);
+  room.startRound();
+  assert.strictEqual(room.privateState(players[0].id).round, 1);
+  room.beginVoting();
+  room.resolveVotes();
+  room.startRound();
+  assert.strictEqual(room.privateState(players[0].id).round, 2,
+    'sin este número el cliente no puede descartar una carta vieja');
+});
+
 console.log('\nAlmacén de salas');
 
 test('los códigos de sala son de 4 caracteres y únicos', () => {
@@ -286,6 +350,9 @@ test('buscar sala no distingue mayúsculas', () => {
 
   process.env.NO_QR = '1';
   process.env.PORT = '0'; // puerto efímero
+  // Gracias cortas para no alargar la suite; en producción son 45 s y 20 s.
+  process.env.LOBBY_GRACE_MS = process.env.LOBBY_GRACE_MS || '2000';
+  process.env.REVEAL_GRACE_MS = process.env.REVEAL_GRACE_MS || '600';
   const { server, io: ioServer, store } = require('../server/index.js');
   const { io: ioClient } = require('socket.io-client');
 
@@ -457,6 +524,9 @@ test('buscar sala no distingue mayúsculas', () => {
       await assert.rejects(() => ask(tarde, 'game:vote', { targetId: 'skip' }), /siguiente ronda/);
 
       // En la ronda siguiente ya es uno más.
+      await assert.rejects(() => ask(host, 'game:forceResults', {}), /no ha votado nadie/,
+        'no debería poder cerrarse una votación vacía');
+      await ask(host, 'game:vote', { targetId: 'skip' });
       await ask(host, 'game:forceResults', {});
       await waitFor(host, 'room:state', (s) => s.phase === 'results');
       await ask(host, 'game:next', {});
@@ -477,10 +547,13 @@ test('buscar sala no distingue mayúsculas', () => {
       await ask(host, 'game:start', {});
       await waitFor(host, 'room:state', (s) => s.phase === 'reveal');
 
-      // Dos revelan; el tercero se cae sin revelar. La ronda debe avanzar igual.
+      // Dos revelan; el tercero se cae sin revelar. Se le da un margen para
+      // volver y, si no vuelve, la ronda sigue sin él.
       await ask(host, 'game:revealed', {});
       await ask(p2, 'game:revealed', {});
       p3.disconnect();
+      const antesDeGracia = await waitFor(host, 'room:state', (s) => s.players.some((x) => !x.connected));
+      assert.strictEqual(antesDeGracia.phase, 'reveal', 'no debe saltarse el reveal de inmediato');
       await waitFor(host, 'room:state', (s) => s.phase === 'discussion');
 
       // Lo mismo en la votación.
@@ -507,6 +580,59 @@ test('buscar sala no distingue mayúsculas', () => {
       await ask(vuelve, 'room:resume', { code: created.code, playerId: j2.playerId, token: j2.token });
       const despues = await waitFor(host, 'room:state', (s) => s.players.every((p) => p.connected));
       assert.strictEqual(despues.players.length, 2, 'recupera su lugar al volver');
+    });
+
+    await testAsync('no se puede saltar la votación ni reiniciar una partida en curso', async () => {
+      const host = await connect();
+      const created = await ask(host, 'room:create', { name: 'Ana', config: { discussionSeconds: 0 } });
+      const p2 = await connect();
+      const p3 = await connect();
+      await ask(p2, 'room:join', { name: 'Beto', code: created.code });
+      await ask(p3, 'room:join', { name: 'Caro', code: created.code });
+      await ask(host, 'game:start', {});
+      await waitFor(host, 'room:state', (s) => s.phase === 'reveal');
+
+      // Antes se podía arrancar otra ronda desde aquí, saltándose la votación.
+      await assert.rejects(() => ask(host, 'game:next', {}), /terminar la votación/);
+      await assert.rejects(() => ask(host, 'game:start', {}), /ya está en curso/);
+
+      for (const c of [host, p2, p3]) await ask(c, 'game:revealed', {});
+      await waitFor(host, 'room:state', (s) => s.phase === 'discussion');
+      await assert.rejects(() => ask(host, 'game:next', {}), /terminar la votación/);
+
+      await ask(host, 'game:voting', {});
+      await assert.rejects(() => ask(host, 'game:next', {}), /terminar la votación/);
+      await assert.rejects(() => ask(host, 'game:forceResults', {}), /no ha votado nadie/);
+
+      for (const c of [host, p2, p3]) await ask(c, 'game:vote', { targetId: 'skip' });
+      await waitFor(host, 'room:state', (s) => s.phase === 'results');
+      await ask(host, 'game:next', {});
+      await waitFor(host, 'room:state', (s) => s.phase === 'reveal' && s.round.number === 2);
+    });
+
+    await testAsync('la carta privada llega antes que el estado de la sala', async () => {
+      const host = await connect();
+      const created = await ask(host, 'room:create', { name: 'Ana', config: { discussionSeconds: 0 } });
+      const p2 = await connect();
+      const p3 = await connect();
+      await ask(p2, 'room:join', { name: 'Beto', code: created.code });
+      await ask(p3, 'room:join', { name: 'Caro', code: created.code });
+
+      // Si el orden se invirtiera, el cliente pintaría la ronda nueva con la
+      // palabra y la pista de la anterior.
+      // Solo miramos los eventos de la ronda 1; los del lobby no interesan.
+      const orden = [];
+      const hR = (s) => { if (s.phase === 'reveal') orden.push('room'); };
+      const hY = (d) => { if (d.private && d.private.round === 1) orden.push('you'); };
+      host.on('room:state', hR);
+      host.on('you:state', hY);
+      await ask(host, 'game:start', {});
+      await waitFor(host, 'room:state', (s) => s.phase === 'reveal');
+      await new Promise((r) => setTimeout(r, 200));
+      host.off('room:state', hR);
+      host.off('you:state', hY);
+
+      assert.strictEqual(orden[0], 'you', 'la carta debe llegar primero (llegó: ' + orden.join(',') + ')');
     });
 
     await testAsync('el anfitrión puede cambiar la configuración y los demás no', async () => {

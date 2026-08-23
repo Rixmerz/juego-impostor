@@ -552,6 +552,27 @@ input::placeholder { color: var(--text-faint); }
 .timer.is-low .timer-value { color: var(--danger); animation: pulse 1s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: 0.45; } }
 
+.peek { margin-top: 2px; font-size: 14px; min-height: 46px; }
+.peek-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 18px 16px;
+  border-radius: var(--radius);
+  background: linear-gradient(150deg, #1c1740, #2f1c56);
+  border: 1px solid rgba(177, 77, 255, 0.45);
+  text-align: center;
+}
+.peek-card.is-impostor {
+  background: linear-gradient(150deg, #4a0f22, #7a1233);
+  border-color: rgba(255, 77, 109, 0.6);
+}
+.peek-label { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-dim); }
+.peek-word { font-size: 26px; font-weight: 800; word-break: break-word; }
+.peek-extra { font-size: 13px; color: var(--text-dim); }
+.peek-extra b { color: var(--text); }
+
 /* ---------- Votación ---------- */
 
 .vote-head { text-align: center; margin-bottom: 4px; }

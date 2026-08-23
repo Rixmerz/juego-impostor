@@ -49,8 +49,8 @@ app.use((_req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'index.
 
 function broadcastRoom(room) {
   const state = room.publicState();
-  io.to(room.code).emit('room:state', state);
-  // Cada jugador recibe además su carta privada.
+  // La carta privada va PRIMERO: si llegara después, el cliente alcanzaría a
+  // pintar la ronda nueva con la palabra y la pista de la anterior.
   for (const player of room.players.values()) {
     if (!player.socketId) continue;
     io.to(player.socketId).emit('you:state', {
@@ -59,6 +59,7 @@ function broadcastRoom(room) {
       private: room.privateState(player.id)
     });
   }
+  io.to(room.code).emit('room:state', state);
 }
 
 function fail(cb, message) {
@@ -66,6 +67,7 @@ function fail(cb, message) {
 }
 
 const LOBBY_GRACE_MS = Number(process.env.LOBBY_GRACE_MS) || 45000;
+const REVEAL_GRACE_MS = Number(process.env.REVEAL_GRACE_MS) || 20000;
 
 function attach(socket, room, player) {
   clearTimeout(player.dropTimer);
@@ -167,6 +169,7 @@ io.on('connection', (socket) => {
     const room = store.get(socket.data.roomCode);
     if (!room) return fail(cb, 'Sala no encontrada');
     if (socket.data.playerId !== room.hostId) return fail(cb, 'Solo el anfitrión puede iniciar');
+    if (room.phase !== PHASES.LOBBY) return fail(cb, 'La partida ya está en curso');
 
     const result = room.startRound();
     if (!result.ok) return fail(cb, result.reason);
@@ -215,6 +218,7 @@ io.on('connection', (socket) => {
     if (!room) return fail(cb, 'Sala no encontrada');
     if (socket.data.playerId !== room.hostId) return fail(cb, 'Solo el anfitrión puede cerrar la votación');
     if (room.phase !== PHASES.VOTING) return fail(cb, 'No hay votación abierta');
+    if (room.round.votes.size === 0) return fail(cb, 'Todavía no ha votado nadie');
     room.resolveVotes();
     if (typeof cb === 'function') cb({ ok: true });
     broadcastRoom(room);
@@ -224,6 +228,9 @@ io.on('connection', (socket) => {
     const room = store.get(socket.data.roomCode);
     if (!room) return fail(cb, 'Sala no encontrada');
     if (socket.data.playerId !== room.hostId) return fail(cb, 'Solo el anfitrión puede seguir');
+    // Sin esto se podía arrancar otra ronda desde el reveal o el debate,
+    // saltándose la votación por completo.
+    if (room.phase !== PHASES.RESULTS) return fail(cb, 'Primero hay que terminar la votación');
 
     const result = room.startRound();
     if (!result.ok) {
@@ -290,9 +297,19 @@ io.on('connection', (socket) => {
         else broadcastRoom(room);
       }, LOBBY_GRACE_MS);
       if (player.dropTimer.unref) player.dropTimer.unref();
+    } else if (room.phase === PHASES.REVEAL) {
+      // Si se cae mientras todos ven su carta, le damos margen para volver:
+      // avanzar de inmediato lo dejaría en el debate sin saber su palabra.
+      clearTimeout(player.dropTimer);
+      player.dropTimer = setTimeout(() => {
+        const actual = room.players.get(player.id);
+        if (!actual || actual.connected) return;
+        room.unblockPhase();
+        broadcastRoom(room);
+      }, REVEAL_GRACE_MS);
+      if (player.dropTimer.unref) player.dropTimer.unref();
     } else {
-      // Si el que se cayó era el último que faltaba por revelar o votar,
-      // la ronda debe poder seguir igual.
+      // En la votación su voto sí bloquea al resto: se resuelve sin él.
       room.unblockPhase();
     }
     broadcastRoom(room);
