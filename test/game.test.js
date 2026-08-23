@@ -704,6 +704,24 @@ test('buscar sala no distingue mayúsculas', () => {
       assert.ok(data.categories.every((c) => c.name && c.emoji && c.count > 0));
     });
 
+    await testAsync('el HTML no se cachea y los assets van versionados', async () => {
+      const res = await fetch(url + '/');
+      const html = await res.text();
+      assert.match(res.headers.get('cache-control') || '', /no-cache/,
+        'si el HTML se cachea, tras un deploy el celular sigue con la versión vieja');
+
+      const versionados = html.match(/(styles\.css|app\.js)\?v=[a-f0-9]+/g) || [];
+      assert.strictEqual(versionados.length, 2, 'el CSS y el JS deben llevar sello de versión');
+
+      const sello = versionados[0].split('=')[1];
+      const salud = await (await fetch(url + '/api/health')).json();
+      assert.strictEqual(sello, salud.build, 'el sello del HTML debe ser el del build vivo');
+
+      const css = await fetch(url + '/css/styles.css?v=' + sello);
+      assert.match(css.headers.get('cache-control') || '', /immutable/,
+        'las URLs versionadas sí pueden cachearse para siempre');
+    });
+
     await testAsync('la app se sirve en la raíz', async () => {
       const res = await fetch(url + '/');
       const html = await res.text();

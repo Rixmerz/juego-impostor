@@ -183,6 +183,10 @@ anterior — y que la difícil sea siempre una sola palabra. Para agregar más, 
 ## Detalles de la implementación
 
 - **Sin build**: HTML, CSS y JS a secas. Se abre y funciona.
+- **Sin caché rancia**: el HTML se sirve con `no-cache` y enlaza el CSS y el JS con
+  `?v=<sello>`, un hash de su propio contenido. Al desplegar cambia el sello y los
+  navegadores piden la versión nueva; sin esto seguían una hora con la anterior y la
+  página cargaba sin estilos ni comportamiento.
 - **Móvil primero**: targets de 52 px, `safe-area` para el notch, alto fijo al viewport
   (el contenido scrollea dentro, los botones nunca se van de pantalla), soporte de vibración
   y `prefers-reduced-motion`.

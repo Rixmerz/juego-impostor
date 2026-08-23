@@ -205,7 +205,56 @@ const URL = process.env.URL || 'http://localhost:3000';
     check(/Volver a la sala/.test(volver), 'el inicio ofrece "' + volver + '"');
   }
 
-  console.log('\n7. Sesión: perder conexión y volver');
+  console.log('\n7. Un navegador con la versión vieja en caché');
+  {
+    // Reproduce el fallo real: el celular ya tenía el CSS y el JS cacheados y,
+    // tras desplegar, seguía usándolos — la página cargaba sin estilos ni conducta.
+    const ctx = await browser.newContext({ ...devices['iPhone 13'] });
+    const p = await ctx.newPage();
+    const irAConfigurar = async () => {
+      await p.fill('#input-name', 'Zoe');
+      await p.click('#btn-go-create');
+      await p.waitForSelector('#screen-create.is-active');
+      await p.waitForFunction(() => document.querySelectorAll('.chip').length > 0);
+    };
+
+    await p.goto(URL, { waitUntil: 'networkidle' });
+    await irAConfigurar();
+    check(await p.isVisible('#hint-level'), 'primera carga: el selector de dificultad está');
+
+    // Segunda visita: el CSS y el JS ya están en caché del navegador.
+    await p.reload({ waitUntil: 'networkidle' });
+    await irAConfigurar();
+
+    const estilado = await p.evaluate(() => {
+      const seg = document.querySelector('#hint-level');
+      if (!seg) return { existe: false };
+      const cs = getComputedStyle(seg);
+      const btn = seg.querySelector('button');
+      return {
+        existe: true,
+        conEstilo: cs.display === 'grid',
+        botones: seg.querySelectorAll('button').length,
+        alto: Math.round(btn.getBoundingClientRect().height)
+      };
+    });
+    check(estilado.existe, 'tras recargar, el componente sigue en el DOM');
+    check(estilado.conEstilo, 'y con su CSS aplicado (display: ' + (estilado.conEstilo ? 'grid' : 'sin estilo') + ')');
+    check(estilado.botones === 3 && estilado.alto >= 40, 'sus 3 botones miden bien (' + estilado.alto + 'px)');
+
+    // Y la conducta: seleccionar debe cambiar el ejemplo.
+    await p.tap('#hint-level button[data-level="dificil"]');
+    await p.waitForTimeout(200);
+    const tras = await p.evaluate(() => ({
+      marcado: document.querySelector('#hint-level button[data-level="dificil"]').classList.contains('is-on'),
+      ejemplo: document.getElementById('hint-sample').textContent.trim()
+    }));
+    check(tras.marcado, 'al tocar "Difícil" queda marcado');
+    check(/Cinturón»/.test(tras.ejemplo), 'y el ejemplo cambia: ' + tras.ejemplo.replace('Por ejemplo, para Karate: ', ''));
+    await ctx.close();
+  }
+
+  console.log('\n8. Sesión: perder conexión y volver');
   await inv.context().setOffline(true);
   await inv.waitForTimeout(1500);
   await inv.context().setOffline(false);

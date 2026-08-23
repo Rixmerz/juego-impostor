@@ -1,7 +1,9 @@
 'use strict';
 
 const path = require('path');
+const fs = require('fs');
 const http = require('http');
+const crypto = require('crypto');
 const os = require('os');
 const express = require('express');
 const { Server } = require('socket.io');
@@ -33,13 +35,61 @@ const io = new Server(server, {
 const store = new RoomStore();
 
 app.disable('x-powered-by');
-app.use(express.static(path.join(__dirname, '..', 'public'), { maxAge: '1h', extensions: ['html'] }));
+
+const PUBLIC_DIR = path.join(__dirname, '..', 'public');
+
+/**
+ * Sello de versión de los assets. El HTML enlaza el CSS y el JS con ?v=<sello>,
+ * así que al desplegar cambia la URL y el navegador los vuelve a pedir.
+ * Sin esto, tras un deploy los celulares seguían usando durante una hora el CSS
+ * y el JS que tenían en caché: la página cargaba, pero sin estilos ni conducta.
+ */
+const BUILD = crypto
+  .createHash('sha1')
+  .update(['index.html', 'css/styles.css', 'js/app.js']
+    .map((f) => fs.readFileSync(path.join(PUBLIC_DIR, f)))
+    .join('\n'))
+  .digest('hex')
+  .slice(0, 10);
+
+const INDEX_HTML = fs
+  .readFileSync(path.join(PUBLIC_DIR, 'index.html'), 'utf8')
+  .replace(/__BUILD__/g, BUILD);
+
+function enviarApp(_req, res) {
+  // El HTML nunca se cachea: es quien apunta a la versión vigente de los assets.
+  res.set('Cache-Control', 'no-cache');
+  res.type('html').send(INDEX_HTML);
+}
+
+app.get('/', enviarApp);
+app.get('/index.html', enviarApp);
+
+app.use(express.static(PUBLIC_DIR, {
+  etag: true,
+  index: false,
+  setHeaders(res, filePath) {
+    if (/\.(css|js)$/.test(filePath)) {
+      // Vienen con ?v=<sello>, así que se pueden cachear sin miedo.
+      res.set('Cache-Control', 'public, max-age=31536000, immutable');
+    } else if (filePath.endsWith('.html')) {
+      res.set('Cache-Control', 'no-cache');
+    } else {
+      res.set('Cache-Control', 'public, max-age=3600');
+    }
+  }
+}));
 
 app.get('/api/categories', (_req, res) => res.json({ categories: CATEGORY_INDEX }));
-app.get('/api/health', (_req, res) => res.json({ ok: true, rooms: store.rooms.size, uptime: process.uptime() }));
+app.get('/api/health', (_req, res) => res.json({
+  ok: true,
+  build: BUILD,
+  rooms: store.rooms.size,
+  uptime: process.uptime()
+}));
 
 // SPA fallback: cualquier ruta desconocida devuelve el juego.
-app.use((_req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'index.html')));
+app.use(enviarApp);
 
 /* ------------------------------------------------------------------ */
 /* Socket.IO                                                           */
